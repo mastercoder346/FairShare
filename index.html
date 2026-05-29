@@ -299,16 +299,30 @@
                         <input type="text" id="expenseDescInput" required placeholder="e.g., Dinner, Gasoline, Groceries" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Total Cost ($)</label>
-                        <input type="number" id="expenseAmountInput" min="0.01" step="0.01" required placeholder="0.00" oninput="app.validateAndRenderModalFeedback()" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 gap-4">
-                    <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date of Expense</label>
                         <input type="date" id="expenseDateInput" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-semibold">
                     </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-100 pt-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Subtotal ($)</label>
+                        <input type="number" id="expenseAmountInput" min="0.01" step="0.01" required placeholder="0.00" oninput="app.validateAndRenderModalFeedback()" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tax ($) <span class="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
+                        <input type="number" id="expenseTaxInput" min="0" step="0.01" placeholder="0.00" oninput="app.validateAndRenderModalFeedback()" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tips ($) <span class="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
+                        <input type="number" id="expenseTipInput" min="0" step="0.01" placeholder="0.00" oninput="app.validateAndRenderModalFeedback()" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                </div>
+
+                <!-- Grand Total Preview -->
+                <div class="bg-indigo-550 border border-indigo-100/50 p-3 rounded-xl flex justify-between items-center text-indigo-900 mt-2 bg-indigo-50/50">
+                    <span class="text-xs font-bold uppercase tracking-wider">Grand Total (Calculated)</span>
+                    <span id="grandTotalPreviewText" class="text-lg font-black font-mono">$0.00</span>
                 </div>
 
                 <!-- Multiple Payers Selection Strategy UI -->
@@ -816,6 +830,9 @@
                             {
                                 id: 'demo_exp_1',
                                 description: 'Premium Luxury Cabin AirBnb',
+                                subtotal: 1000.00,
+                                tax: 100.00,
+                                tip: 100.00,
                                 totalAmount: 1200.00,
                                 paidBy: { [myName]: 1200.00 },
                                 splits: { [myName]: 300, 'Snigdha': 300, 'Sikhara': 300, 'Sisira': 300 },
@@ -827,6 +844,9 @@
                             {
                                 id: 'demo_exp_2',
                                 description: 'Organic Snacks & Food Groceries',
+                                subtotal: 200.00,
+                                tax: 15.00,
+                                tip: 25.00,
                                 totalAmount: 240.00,
                                 paidBy: { 'Snigdha': 240.00 },
                                 splits: { [myName]: 60, 'Snigdha': 60, 'Sikhara': 60, 'Sisira': 60 },
@@ -1030,6 +1050,11 @@
                 // Set Today as default date on new entry
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('expenseDateInput').value = today;
+                
+                // Clear Tax & Tip inputs
+                document.getElementById('expenseAmountInput').value = '';
+                document.getElementById('expenseTaxInput').value = '';
+                document.getElementById('expenseTipInput').value = '';
 
                 this.activePayerType = 'single';
                 this.activeSplitMethod = 'equal';
@@ -1062,6 +1087,8 @@
                 document.getElementById('payerValidationMessage').classList.add('hidden');
                 document.getElementById('splitValidationMessage').classList.add('hidden');
                 document.getElementById('expenseDescInput').focus();
+                
+                this.validateAndRenderModalFeedback();
             }
 
             showExpenseModalForEdit(expenseId) {
@@ -1076,7 +1103,11 @@
                 document.getElementById('saveExpenseBtn').textContent = "Save Changes";
 
                 document.getElementById('expenseDescInput').value = exp.description;
-                document.getElementById('expenseAmountInput').value = exp.totalAmount;
+                
+                // Hydrate subtotal, tax, tip fields with secure fallbacks
+                document.getElementById('expenseAmountInput').value = exp.subtotal !== undefined ? exp.subtotal : exp.totalAmount;
+                document.getElementById('expenseTaxInput').value = exp.tax !== undefined && exp.tax > 0 ? exp.tax : '';
+                document.getElementById('expenseTipInput').value = exp.tip !== undefined && exp.tip > 0 ? exp.tip : '';
                 
                 // Hydrate date picker
                 document.getElementById('expenseDateInput').value = exp.date || new Date().toISOString().split('T')[0];
@@ -1304,15 +1335,24 @@
                 });
             }
 
-            // --- Real-time validation checks ---
+            // --- Real-time validation checks with Proportional Tax & Tip Splits ---
             validateAndRenderModalFeedback() {
-                const totalAmountInput = document.getElementById('expenseAmountInput');
-                const totalAmount = parseFloat(totalAmountInput.value) || 0;
-                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                const subtotalInput = document.getElementById('expenseAmountInput');
+                const subtotal = parseFloat(subtotalInput.value) || 0;
                 
+                const taxInput = document.getElementById('expenseTaxInput');
+                const tax = parseFloat(taxInput.value) || 0;
+                
+                const tipInput = document.getElementById('expenseTipInput');
+                const tip = parseFloat(tipInput.value) || 0;
+                
+                const grandTotal = subtotal + tax + tip;
+                document.getElementById('grandTotalPreviewText').textContent = `$${grandTotal.toFixed(2)}`;
+
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
                 if (!group) return false;
 
-                // 1. Payer validations
+                // 1. Payer validations mapped to Grand Total
                 const payerValidationMessage = document.getElementById('payerValidationMessage');
                 let payersSum = 0;
                 let isPayersValid = true;
@@ -1326,30 +1366,32 @@
                     });
                     
                     payerValidationMessage.classList.remove('hidden');
-                    const discrepancy = Math.abs(payersSum - totalAmount);
+                    const discrepancy = Math.abs(payersSum - grandTotal);
                     if (discrepancy < 0.01) {
                         payerValidationMessage.className = "text-[11px] text-emerald-600 mt-1 font-bold";
-                        payerValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Sum matches Total Cost ($${payersSum.toFixed(2)})`;
+                        payerValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Sum matches Grand Total ($${payersSum.toFixed(2)})`;
                     } else {
                         isPayersValid = false;
                         payerValidationMessage.className = "text-[11px] text-rose-500 mt-1 font-bold";
-                        if (payersSum < totalAmount) {
-                            payerValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-pulse"></i> Sum: $${payersSum.toFixed(2)} (**$${(totalAmount - payersSum).toFixed(2)} remaining**)`;
+                        if (payersSum < grandTotal) {
+                            payerValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-pulse"></i> Sum: $${payersSum.toFixed(2)} (**$${(grandTotal - payersSum).toFixed(2)} remaining**)`;
                         } else {
-                            payerValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-pulse"></i> Sum: $${payersSum.toFixed(2)} (**$${(payersSum - totalAmount).toFixed(2)} overpaid**)`;
+                            payerValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-pulse"></i> Sum: $${payersSum.toFixed(2)} (**$${(payersSum - grandTotal).toFixed(2)} overpaid**)`;
                         }
                     }
                 }
 
-                // 2. Split mechanics evaluations
+                // 2. Split mechanics evaluations & Proportional previews
                 const splitValidationMessage = document.getElementById('splitValidationMessage');
                 let isSplitValid = true;
+                
+                const ratio = subtotal > 0 ? (grandTotal / subtotal) : 1;
 
                 if (this.activeSplitMethod === 'equal') {
                     const checkedCheckboxes = document.querySelectorAll('input[name="splitEqualMembers"]:checked');
                     const selectedCount = checkedCheckboxes.length;
                     if (selectedCount > 0) {
-                        const individualShare = totalAmount / selectedCount;
+                        const individualShare = grandTotal / selectedCount;
                         group.members.forEach(m => {
                             const preview = document.getElementById(`equal-share-preview-${m.name}`);
                             const checkbox = document.querySelector(`input[name="splitEqualMembers"][value="${m.name}"]`);
@@ -1377,7 +1419,7 @@
                         group.members.forEach(m => {
                             const preview = document.getElementById(`shares-share-preview-${m.name}`);
                             if (preview) {
-                                const calculated = totalAmount * (memberShares[m.name] / totalShares);
+                                const calculated = subtotal * (memberShares[m.name] / totalShares) * ratio;
                                 preview.textContent = `$${calculated.toFixed(2)}`;
                             }
                         });
@@ -1397,7 +1439,7 @@
 
                         const preview = document.getElementById(`percentage-share-preview-${m.name}`);
                         if (preview) {
-                            const calculated = totalAmount * (pct / 100);
+                            const calculated = subtotal * (pct / 100) * ratio;
                             preview.textContent = `$${calculated.toFixed(2)}`;
                         }
                     });
@@ -1424,25 +1466,25 @@
                     });
 
                     splitValidationMessage.classList.remove('hidden');
-                    const discrepancy = Math.abs(exactSum - totalAmount);
+                    const discrepancy = Math.abs(exactSum - subtotal);
                     if (discrepancy < 0.01) {
                         splitValidationMessage.className = "text-[11px] text-emerald-600 mt-1.5 font-bold";
-                        splitValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Allocation matches Total Cost ($${exactSum.toFixed(2)})`;
+                        splitValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Allocation matches Subtotal ($${exactSum.toFixed(2)}). Taxes & Tips proportionally added!`;
                     } else {
                         isSplitValid = false;
                         splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
-                        if (exactSum < totalAmount) {
+                        if (exactSum < subtotal) {
                             splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
-                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Allocated: $${exactSum.toFixed(2)} (**$${(totalAmount - exactSum).toFixed(2)} remaining**)`;
+                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Allocated: $${exactSum.toFixed(2)} (**$${(subtotal - exactSum).toFixed(2)} remaining**)`;
                         } else {
-                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Allocated: $${exactSum.toFixed(2)} (**$${(exactSum - totalAmount).toFixed(2)} over**)`;
+                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Allocated: $${exactSum.toFixed(2)} (**$${(exactSum - subtotal).toFixed(2)} over**)`;
                         }
                     }
                 }
 
                 // 3. Overall validation gate
                 const saveBtn = document.getElementById('saveExpenseBtn');
-                const isValid = isPayersValid && isSplitValid && totalAmount > 0;
+                const isValid = isPayersValid && isSplitValid && subtotal > 0;
                 
                 if (isValid) {
                     saveBtn.className = "px-5 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition shadow-sm cursor-pointer opacity-100";
@@ -1475,6 +1517,8 @@
                 document.getElementById('groupNameInput').value = '';
                 document.getElementById('expenseDescInput').value = '';
                 document.getElementById('expenseAmountInput').value = '';
+                document.getElementById('expenseTaxInput').value = '';
+                document.getElementById('expenseTipInput').value = '';
                 document.getElementById('settleAmountInput').value = '';
             }
 
@@ -1629,7 +1673,10 @@
             async handleCreateExpense(e) {
                 e.preventDefault();
                 const description = document.getElementById('expenseDescInput').value.trim();
-                const totalAmount = parseFloat(document.getElementById('expenseAmountInput').value) || 0;
+                const subtotal = parseFloat(document.getElementById('expenseAmountInput').value) || 0;
+                const tax = parseFloat(document.getElementById('expenseTaxInput').value) || 0;
+                const tip = parseFloat(document.getElementById('expenseTipInput').value) || 0;
+                const totalAmount = subtotal + tax + tip;
                 
                 // Retrieve date picker input values
                 const rawDate = document.getElementById('expenseDateInput').value;
@@ -1655,7 +1702,14 @@
                     });
                 }
 
-                let splits = this.calculateComputedSplits(totalAmount, this.activeSplitMethod, group.members);
+                // Split subtotal first, then apply proportional multiplier for tax and tip
+                let baseSplits = this.calculateComputedSplits(subtotal, this.activeSplitMethod, group.members);
+                let splits = {};
+                const ratio = subtotal > 0 ? (totalAmount / subtotal) : 1;
+                Object.keys(baseSplits).forEach(name => {
+                    splits[name] = baseSplits[name] * ratio;
+                });
+
                 let splitBetween = Object.keys(splits).filter(m => splits[m] > 0.009);
 
                 const updatedExpenses = JSON.parse(JSON.stringify(group.expenses || []));
@@ -1666,6 +1720,9 @@
                         updatedExpenses[index] = {
                             ...updatedExpenses[index],
                             description,
+                            subtotal,
+                            tax,
+                            tip,
                             totalAmount,
                             paidBy,
                             splits,
@@ -1680,6 +1737,9 @@
                     const newExpense = {
                         id: 'exp_' + Date.now(),
                         description,
+                        subtotal,
+                        tax,
+                        tip,
                         totalAmount,
                         paidBy,
                         splits,
@@ -2184,7 +2244,17 @@
                     return;
                 }
 
-                [...expenses].reverse().forEach(exp => {
+                // Chronological sorting: Sort transactions by Expense Date Descending, fallback to creation ID desc
+                const sortedExpenses = [...expenses].sort((a, b) => {
+                    const dateA = a.date || '1970-01-01';
+                    const dateB = b.date || '1970-01-01';
+                    if (dateA !== dateB) {
+                        return dateB.localeCompare(dateA); // Newest dates first
+                    }
+                    return b.id.localeCompare(a.id); // Fallback to creation timestamp descending
+                });
+
+                sortedExpenses.forEach(exp => {
                     const row = document.createElement('div');
                     const isSettlement = exp.splitMethod === 'settlement' || exp.isSettlement;
                     const editFunctionName = isSettlement ? 'showSettleUpModalForEdit' : 'showExpenseModalForEdit';
@@ -2237,6 +2307,15 @@
                         const splitCount = Object.keys(exp.splits || {}).filter(k => exp.splits[k] > 0.01).length;
                         const individualShare = splitCount > 0 ? (exp.totalAmount / splitCount).toFixed(2) : '0.00';
 
+                        // Build breakdown parameters for Tax and Tips mapping transparency
+                        let breakdownDetailsText = "";
+                        if (exp.tax > 0 || exp.tip > 0) {
+                            const subtotalVal = exp.subtotal !== undefined ? exp.subtotal : exp.totalAmount;
+                            const taxVal = exp.tax || 0;
+                            const tipVal = exp.tip || 0;
+                            breakdownDetailsText = ` • ($${subtotalVal.toFixed(2)} base + $${taxVal.toFixed(2)} tax + $${tipVal.toFixed(2)} tip)`;
+                        }
+
                         row.className = 'group flex justify-between items-center p-4 hover:bg-slate-50/70 transition-all border-b border-slate-100 last:border-0';
                         row.innerHTML = `
                             <div class="flex items-start space-x-3 truncate min-w-0 flex-1 pr-3">
@@ -2246,7 +2325,7 @@
                                 <div class="truncate min-w-0 flex-1">
                                     <h4 class="font-bold text-slate-800 text-sm truncate" title="${exp.description}">${exp.description}</h4>
                                     <p class="text-xs text-slate-400 mt-1 cursor-help" title="${payerTooltip}">
-                                        Paid by <span class="font-bold text-slate-600 border-b border-dashed border-slate-300">${payerLabel}</span> • ${exp.timestamp}
+                                        Paid by <span class="font-bold text-slate-600 border-b border-dashed border-slate-300">${payerLabel}</span> • ${exp.timestamp}${breakdownDetailsText}
                                     </p>
                                     <div class="mt-1.5 flex flex-wrap gap-1 items-center">
                                         <span class="text-[10px] bg-indigo-50 border border-indigo-100/50 text-indigo-600 font-extrabold px-1.5 py-0.25 rounded-md">
@@ -2378,7 +2457,14 @@
                         </div>
                     `;
                 } else {
-                    [...group.expenses].reverse().forEach(exp => {
+                    const sortedExpensesReport = [...group.expenses].sort((a, b) => {
+                        const dateA = a.date || '1970-01-01';
+                        const dateB = b.date || '1970-01-01';
+                        if (dateA !== dateB) return dateB.localeCompare(dateA);
+                        return b.id.localeCompare(a.id);
+                    });
+
+                    sortedExpensesReport.forEach(exp => {
                         if (exp.splitMethod === 'settlement' || exp.isSettlement) {
                             const payer = Object.keys(exp.paidBy || {})[0] || 'Unknown';
                             const receiver = Object.keys(exp.splits || {})[0] || 'Unknown';
@@ -2422,11 +2508,19 @@
                                 }
                             });
 
+                            let breakdownDetailsText = "";
+                            if (exp.tax > 0 || exp.tip > 0) {
+                                const subtotalVal = exp.subtotal !== undefined ? exp.subtotal : exp.totalAmount;
+                                const taxVal = exp.tax || 0;
+                                const tipVal = exp.tip || 0;
+                                breakdownDetailsText = ` • ($${subtotalVal.toFixed(2)} base + $${taxVal.toFixed(2)} tax + $${tipVal.toFixed(2)} tip)`;
+                            }
+
                             ledgerRowsHtml += `
                                 <div class="p-4 flex justify-between items-center hover:bg-slate-50/50 transition duration-150">
                                     <div class="min-w-0 flex-1 pr-3">
                                         <h4 class="font-bold text-slate-800 text-sm truncate">${exp.description}</h4>
-                                        <p class="text-xs text-slate-400 mt-0.5">Paid by <span class="font-semibold text-slate-600">${payerLabel}</span> • ${exp.timestamp}</p>
+                                        <p class="text-xs text-slate-400 mt-0.5">Paid by <span class="font-semibold text-slate-600">${payerLabel}</span> • ${exp.timestamp}${breakdownDetailsText}</p>
                                         <div class="mt-2 flex flex-wrap">${splitsBreakdown}</div>
                                     </div>
                                     <div class="text-right shrink-0 font-mono">
@@ -2467,7 +2561,7 @@
         <!-- Banner Card -->
         <div class="bg-indigo-600 text-white p-6 sm:p-8 rounded-3xl shadow-md relative overflow-hidden">
             <div class="relative z-10 space-y-2">
-                <span class="bg-indigo-500/55 border border-indigo-400/80 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
+                <span class="bg-indigo-500/55 border border-indigo-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
                 <h1 class="text-3xl sm:text-4xl font-black tracking-tight">${group.name}</h1>
                 <p class="text-indigo-100 text-xs">Generated on ${exportDate} via FairShare Cloud Engine</p>
             </div>
