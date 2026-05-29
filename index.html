@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FairShare - Smart Group Expense Splitter</title>
+    <title>FairShare - Real-Time Group Expense Splitter</title>
     <!-- Tailwind CSS for Responsive Utility-first UI styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome for Premium Icons -->
@@ -304,6 +304,13 @@
                     </div>
                 </div>
 
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date of Expense</label>
+                        <input type="date" id="expenseDateInput" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-semibold">
+                    </div>
+                </div>
+
                 <!-- Multiple Payers Selection Strategy UI -->
                 <div class="border-t border-slate-100 pt-3">
                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Who Paid?</label>
@@ -464,6 +471,64 @@
                 this.settleUpModal = document.getElementById('settleUpModal');
                 this.confirmModal = document.getElementById('confirmModal');
                 this.authProfileModal = document.getElementById('authProfileModal');
+            }
+
+            // --- Custom Toast Warning System ---
+            showToast(message, type = 'success') {
+                const toastContainer = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `flex items-center space-x-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm transition-all duration-300 transform translate-y-4 opacity-0 pointer-events-auto ${
+                    type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                    type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+                }`;
+
+                const icon = type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info';
+                toast.innerHTML = `
+                    <i class="fa-solid ${icon} text-lg shrink-0"></i>
+                    <span class="font-semibold text-xs">${message}</span>
+                `;
+
+                toastContainer.appendChild(toast);
+                
+                // Animate entry
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-4', 'opacity-0');
+                }, 10);
+
+                // Animate exit and cleanup
+                setTimeout(() => {
+                    toast.classList.add('translate-y-2', 'opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3500);
+            }
+
+            // --- Custom Modal Dialog (Avoids blocking alert/confirm) ---
+            showConfirm(title, text, onProceed) {
+                this.confirmModal.querySelector('#confirmModalTitle').textContent = title;
+                this.confirmModal.querySelector('#confirmModalText').textContent = text;
+                
+                const cancelBtn = this.confirmModal.querySelector('#confirmCancelBtn');
+                const proceedBtn = this.confirmModal.querySelector('#confirmProceedBtn');
+
+                const cleanClose = () => {
+                    this.confirmModal.classList.add('scale-95', 'opacity-0');
+                    setTimeout(() => {
+                        this.confirmModal.classList.add('hidden');
+                        this.modalOverlay.classList.add('hidden');
+                    }, 150);
+                };
+
+                cancelBtn.onclick = cleanClose;
+                proceedBtn.onclick = () => {
+                    onProceed();
+                    cleanClose();
+                };
+
+                this.modalOverlay.classList.remove('hidden');
+                this.confirmModal.classList.remove('hidden');
+                setTimeout(() => {
+                    this.confirmModal.classList.remove('scale-95', 'opacity-0');
+                }, 10);
             }
 
             async start() {
@@ -756,6 +821,7 @@
                                 splits: { [myName]: 300, 'Snigdha': 300, 'Sikhara': 300, 'Sisira': 300 },
                                 splitMethod: 'equal',
                                 splitBetween: [myName, 'Snigdha', 'Sikhara', 'Sisira'],
+                                date: '2026-05-24',
                                 timestamp: 'May 24, 2026'
                             },
                             {
@@ -766,6 +832,7 @@
                                 splits: { [myName]: 60, 'Snigdha': 60, 'Sikhara': 60, 'Sisira': 60 },
                                 splitMethod: 'equal',
                                 splitBetween: [myName, 'Snigdha', 'Sikhara', 'Sisira'],
+                                date: '2026-05-25',
                                 timestamp: 'May 25, 2026'
                             }
                         ]
@@ -960,6 +1027,10 @@
                 document.getElementById('expenseModalTitle').innerHTML = `<i class="fa-solid fa-receipt"></i> Log Expense Entry`;
                 document.getElementById('saveExpenseBtn').textContent = "Save Expense";
 
+                // Set Today as default date on new entry
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('expenseDateInput').value = today;
+
                 this.activePayerType = 'single';
                 this.activeSplitMethod = 'equal';
                 this.updatePayerTabStyles();
@@ -1006,6 +1077,9 @@
 
                 document.getElementById('expenseDescInput').value = exp.description;
                 document.getElementById('expenseAmountInput').value = exp.totalAmount;
+                
+                // Hydrate date picker
+                document.getElementById('expenseDateInput').value = exp.date || new Date().toISOString().split('T')[0];
 
                 const payerKeys = Object.keys(exp.paidBy || {}).filter(k => exp.paidBy[k] > 0.01);
                 if (payerKeys.length <= 1) {
@@ -1230,6 +1304,7 @@
                 });
             }
 
+            // --- Real-time validation checks ---
             validateAndRenderModalFeedback() {
                 const totalAmountInput = document.getElementById('expenseAmountInput');
                 const totalAmount = parseFloat(totalAmountInput.value) || 0;
@@ -1403,10 +1478,12 @@
                 document.getElementById('settleAmountInput').value = '';
             }
 
+            // --- Database Actions / Controllers ---
             async handleCreateGroup(e) {
                 e.preventDefault();
                 const name = document.getElementById('groupNameInput').value.trim();
 
+                // Collate dynamic friend row members inputs
                 const memberRows = document.querySelectorAll('#groupMembersInputsContainer > div');
                 const members = [];
                 const uniqueNames = new Set();
@@ -1448,6 +1525,7 @@
                 }
             }
 
+            // Join a group if invited by phone using group ID shared explicitly
             async handleJoinByGroupId() {
                 const joinId = document.getElementById('joinGroupIdInput').value.trim();
                 if (!joinId) {
@@ -1553,6 +1631,10 @@
                 const description = document.getElementById('expenseDescInput').value.trim();
                 const totalAmount = parseFloat(document.getElementById('expenseAmountInput').value) || 0;
                 
+                // Retrieve date picker input values
+                const rawDate = document.getElementById('expenseDateInput').value;
+                const formattedDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
                 const group = this.allGroups.find(g => g.id === this.activeGroupId);
                 if (!group) return;
 
@@ -1589,6 +1671,8 @@
                             splits,
                             splitMethod: this.activeSplitMethod,
                             splitBetween,
+                            date: rawDate,
+                            timestamp: formattedDate,
                             splitInputs: this.captureSplitInputs(group.members)
                         };
                     }
@@ -1601,7 +1685,8 @@
                         splits,
                         splitMethod: this.activeSplitMethod,
                         splitBetween,
-                        timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        date: rawDate,
+                        timestamp: formattedDate,
                         splitInputs: this.captureSplitInputs(group.members)
                     };
                     updatedExpenses.push(newExpense);
@@ -1696,7 +1781,7 @@
             }
 
             async deleteGroup(groupId, event) {
-                event.stopPropagation();
+                if (event) event.stopPropagation(); // Avoid triggering group-selection actions
                 
                 const group = this.allGroups.find(g => g.id === groupId);
                 const groupName = group ? group.name : "this group";
@@ -1848,7 +1933,7 @@
                             <span class="text-base">${group.name.includes('🌲') || group.name.includes('🔑') ? '' : '📁'}</span>
                             <span class="truncate">${group.name}</span>
                         </div>
-                        <button onclick="app.deleteGroup('${group.id}', event)" class="opacity-0 group-hover:opacity-100 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-all cursor-pointer" title="Delete Group">
+                        <button onclick="app.deleteGroup('${group.id}', event)" class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition-all cursor-pointer shrink-0" title="Delete Group">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     `;
@@ -2135,7 +2220,7 @@
                                 <div class="text-right">
                                     <span class="text-base font-black text-emerald-600 block font-mono">$${exp.totalAmount.toFixed(2)}</span>
                                 </div>
-                                <div class="flex items-center space-x-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <div class="flex items-center space-x-1 shrink-0">
                                     <button onclick="app.${editFunctionName}('${exp.id}')" class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center w-8 h-8" title="Edit Settlement">
                                         <i class="fa-solid fa-pen text-xs"></i>
                                     </button>
@@ -2178,7 +2263,7 @@
                                     <span class="text-base font-extrabold text-slate-800 block">$${exp.totalAmount.toFixed(2)}</span>
                                     <span class="text-[10px] text-slate-400 font-medium block">($${individualShare} each)</span>
                                 </div>
-                                <div class="flex items-center space-x-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <div class="flex items-center space-x-1 shrink-0">
                                     <button onclick="app.${editFunctionName}('${exp.id}')" class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center w-8 h-8" title="Edit Expense">
                                         <i class="fa-solid fa-pen text-xs"></i>
                                     </button>
@@ -2382,7 +2467,7 @@
         <!-- Banner Card -->
         <div class="bg-indigo-600 text-white p-6 sm:p-8 rounded-3xl shadow-md relative overflow-hidden">
             <div class="relative z-10 space-y-2">
-                <span class="bg-indigo-500/55 border border-indigo-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
+                <span class="bg-indigo-500/55 border border-indigo-400/80 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
                 <h1 class="text-3xl sm:text-4xl font-black tracking-tight">${group.name}</h1>
                 <p class="text-indigo-100 text-xs">Generated on ${exportDate} via FairShare Cloud Engine</p>
             </div>
