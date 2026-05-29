@@ -392,6 +392,11 @@
                         </select>
                     </div>
                 </div>
+                <!-- Settle Up Date Selection Field -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date of Settlement</label>
+                    <input type="date" id="settleDateInput" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-sm font-semibold">
+                </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Amount Sent ($)</label>
                     <input type="number" id="settleAmountInput" min="0.01" step="0.01" required placeholder="0.00" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-sm">
@@ -950,7 +955,7 @@
                 container.appendChild(row);
             }
 
-            showSettleUpModal(payerName = '', receiverName = '', amountVal = '') {
+            showSettleUpModal(payerName = '', receiverName = '', amountVal = '', dateVal = '') {
                 if (!this.activeGroupId) return;
                 const group = this.allGroups.find(g => g.id === this.activeGroupId);
                 if (!group) return;
@@ -958,8 +963,9 @@
                 const settlePayerSelect = document.getElementById('settlePayerSelect');
                 const settleReceiverSelect = document.getElementById('settleReceiverSelect');
                 const settleAmountInput = document.getElementById('settleAmountInput');
+                const settleDateInput = document.getElementById('settleDateInput');
 
-                if (!payerName && !receiverName && !amountVal) {
+                if (!payerName && !receiverName && !amountVal && !dateVal) {
                     this.editingSettlementId = null;
                 }
 
@@ -1012,6 +1018,13 @@
                     settleAmountInput.value = '';
                 }
 
+                // Hydrate Date field in the Settlement UI
+                if (dateVal) {
+                    settleDateInput.value = dateVal;
+                } else {
+                    settleDateInput.value = new Date().toISOString().split('T')[0];
+                }
+
                 this.modalOverlay.classList.remove('hidden');
                 this.settleUpModal.classList.remove('hidden');
                 setTimeout(() => {
@@ -1031,8 +1044,9 @@
                 const payer = Object.keys(exp.paidBy || {})[0] || '';
                 const receiver = Object.keys(exp.splits || {})[0] || '';
                 const amount = exp.totalAmount;
+                const date = exp.date || '';
 
-                this.showSettleUpModal(payer, receiver, amount);
+                this.showSettleUpModal(payer, receiver, amount, date);
                 
                 document.getElementById('settleUpModalTitle').innerHTML = `<i class="fa-solid fa-handshake"></i> Edit Settlement Payment`;
                 document.getElementById('saveSettleUpBtn').textContent = "Save Changes";
@@ -1168,7 +1182,7 @@
                     });
                 } else if (this.activeSplitMethod === 'shares') {
                     group.members.forEach(m => {
-                        const input = document.getElementById(`share-input-${m.name}`);
+                        const input = document.getElementById('share-input-' + m.name);
                         if (input) {
                             if (exp.splitInputs && exp.splitInputs[m.name] !== undefined) {
                                 input.value = exp.splitInputs[m.name];
@@ -1179,7 +1193,7 @@
                     });
                 } else if (this.activeSplitMethod === 'percentage') {
                     group.members.forEach(m => {
-                        const input = document.getElementById(`percentage-input-${m.name}`);
+                        const input = document.getElementById('percentage-input-' + m.name);
                         if (input) {
                             if (exp.splitInputs && exp.splitInputs[m.name] !== undefined) {
                                 input.value = exp.splitInputs[m.name];
@@ -1190,7 +1204,7 @@
                     });
                 } else if (this.activeSplitMethod === 'exact') {
                     group.members.forEach(m => {
-                        const input = document.getElementById(`exact-input-${m.name}`);
+                        const input = document.getElementById('exact-input-' + m.name);
                         if (input) {
                             if (exp.splitInputs && exp.splitInputs[m.name] !== undefined) {
                                 input.value = exp.splitInputs[m.name] > 0 ? exp.splitInputs[m.name] : '';
@@ -1394,7 +1408,7 @@
                         const individualShare = grandTotal / selectedCount;
                         group.members.forEach(m => {
                             const preview = document.getElementById(`equal-share-preview-${m.name}`);
-                            const checkbox = document.querySelector(`input[name="splitEqualMembers"][value="${m.name}"]`);
+                            const checkbox = document.querySelector('input[name="splitEqualMembers"][value="' + m.name + '"]');
                             if (preview) {
                                 preview.textContent = checkbox && checkbox.checked ? `$${individualShare.toFixed(2)}` : '$0.00';
                             }
@@ -1410,14 +1424,14 @@
                     let totalShares = 0;
                     let memberShares = {};
                     group.members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`share-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('share-input-' + m.name)?.value || 0);
                         memberShares[m.name] = isNaN(val) ? 0 : val;
                         totalShares += memberShares[m.name];
                     });
 
                     if (totalShares > 0) {
                         group.members.forEach(m => {
-                            const preview = document.getElementById(`shares-share-preview-${m.name}`);
+                            const preview = document.getElementById('shares-share-preview-' + m.name);
                             if (preview) {
                                 const calculated = subtotal * (memberShares[m.name] / totalShares) * ratio;
                                 preview.textContent = `$${calculated.toFixed(2)}`;
@@ -1433,11 +1447,11 @@
                 } else if (this.activeSplitMethod === 'percentage') {
                     let totalPercentage = 0;
                     group.members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`percentage-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('percentage-input-' + m.name)?.value || 0);
                         const pct = isNaN(val) ? 0 : val;
                         totalPercentage += pct;
 
-                        const preview = document.getElementById(`percentage-share-preview-${m.name}`);
+                        const preview = document.getElementById('percentage-share-preview-' + m.name);
                         if (preview) {
                             const calculated = subtotal * (pct / 100) * ratio;
                             preview.textContent = `$${calculated.toFixed(2)}`;
@@ -1461,7 +1475,7 @@
                 } else if (this.activeSplitMethod === 'exact') {
                     let exactSum = 0;
                     group.members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`exact-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('exact-input-' + m.name)?.value || 0);
                         exactSum += isNaN(val) ? 0 : val;
                     });
 
@@ -1615,15 +1629,15 @@
                     inputs = { checked };
                 } else if (this.activeSplitMethod === 'shares') {
                     members.forEach(m => {
-                        inputs[m.name] = parseFloat(document.getElementById(`share-input-${m.name}`)?.value || 0);
+                        inputs[m.name] = parseFloat(document.getElementById('share-input-' + m.name)?.value || 0);
                     });
                 } else if (this.activeSplitMethod === 'percentage') {
                     members.forEach(m => {
-                        inputs[m.name] = parseFloat(document.getElementById(`percentage-input-${m.name}`)?.value || 0);
+                        inputs[m.name] = parseFloat(document.getElementById('percentage-input-' + m.name)?.value || 0);
                     });
                 } else if (this.activeSplitMethod === 'exact') {
                     members.forEach(m => {
-                        inputs[m.name] = parseFloat(document.getElementById(`exact-input-${m.name}`)?.value || 0);
+                        inputs[m.name] = parseFloat(document.getElementById('exact-input-' + m.name)?.value || 0);
                     });
                 }
                 return inputs;
@@ -1646,7 +1660,7 @@
                     let totalShares = 0;
                     let memberShares = {};
                     members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`share-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('share-input-' + m.name)?.value || 0);
                         memberShares[m.name] = isNaN(val) ? 0 : val;
                         totalShares += memberShares[m.name];
                     });
@@ -1657,13 +1671,13 @@
                     }
                 } else if (method === 'percentage') {
                     members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`percentage-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('percentage-input-' + m.name)?.value || 0);
                         const pct = isNaN(val) ? 0 : val;
                         computed[m.name] = totalAmount * (pct / 100);
                     });
                 } else if (method === 'exact') {
                     members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`exact-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('exact-input-' + m.name)?.value || 0);
                         computed[m.name] = isNaN(val) ? 0 : val;
                     });
                 }
@@ -1697,7 +1711,7 @@
                     paidBy[singlePayer] = totalAmount;
                 } else {
                     group.members.forEach(m => {
-                        const val = parseFloat(document.getElementById(`payer-input-${m.name}`)?.value || 0);
+                        const val = parseFloat(document.getElementById('payer-input-' + m.name)?.value || 0);
                         if (val > 0.009) paidBy[m.name] = val;
                     });
                 }
@@ -1769,6 +1783,10 @@
                 const payer = document.getElementById('settlePayerSelect').value;
                 const receiver = document.getElementById('settleReceiverSelect').value;
                 const amount = parseFloat(document.getElementById('settleAmountInput').value) || 0;
+                
+                // Retrieve Date selector values for settlements
+                const rawDate = document.getElementById('settleDateInput').value;
+                const formattedDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
                 if (payer === receiver) {
                     this.showToast("Payer and Receiver cannot be the same person!", "error");
@@ -1789,7 +1807,9 @@
                             totalAmount: amount,
                             paidBy: { [payer]: amount },
                             splits: { [receiver]: amount },
-                            splitBetween: [receiver]
+                            splitBetween: [receiver],
+                            date: rawDate,
+                            timestamp: formattedDate
                         };
                     }
                 } else {
@@ -1802,7 +1822,8 @@
                         splitMethod: 'settlement',
                         splitBetween: [receiver],
                         isSettlement: true,
-                        timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        date: rawDate,
+                        timestamp: formattedDate
                     };
                     updatedExpenses.push(newExpense);
                 }
@@ -1952,7 +1973,7 @@
 
                 const tabs = ['groups', 'expenses', 'balances'];
                 tabs.forEach(t => {
-                    const btn = document.getElementById(`mobileTab-${t}`);
+                    const btn = document.getElementById('mobileTab-' + t);
                     if (btn) {
                         if (t === this.activeMobileTab) {
                             btn.className = "flex flex-col items-center justify-center text-indigo-600 font-extrabold text-[11px] transition-colors flex-1";
@@ -2561,7 +2582,7 @@
         <!-- Banner Card -->
         <div class="bg-indigo-600 text-white p-6 sm:p-8 rounded-3xl shadow-md relative overflow-hidden">
             <div class="relative z-10 space-y-2">
-                <span class="bg-indigo-500/55 border border-indigo-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
+                <span class="bg-indigo-500/55 border border-indigo-400/80 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
                 <h1 class="text-3xl sm:text-4xl font-black tracking-tight">${group.name}</h1>
                 <p class="text-indigo-100 text-xs">Generated on ${exportDate} via FairShare Cloud Engine</p>
             </div>
