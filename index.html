@@ -1,0 +1,2506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FairShare - Smart Group Expense Splitter</title>
+    <!-- Tailwind CSS for Responsive Utility-first UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar adjustments for a premium desktop feeling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Mobile-first input helper: Prevents auto-zoom on iOS Safari */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+        @media (min-width: 640px) {
+            input, select, textarea {
+                font-size: 14px !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col pb-20 md:pb-0">
+
+    <!-- Top Navigation bar -->
+    <nav class="bg-indigo-600 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
+            <div class="flex items-center space-x-2.5 font-bold text-xl tracking-tight cursor-pointer select-none" onclick="app.resetView()">
+                <div class="bg-white text-indigo-600 p-2 rounded-lg shadow-sm flex items-center justify-center w-9 h-9">
+                    <i class="fa-solid fa-scale-balanced text-lg"></i>
+                </div>
+                <span>FairShare</span>
+            </div>
+            
+            <!-- Connection & Cloud Status Indicator -->
+            <div class="flex items-center space-x-2.5">
+                <div id="cloudStatusBadge" class="hidden items-center gap-1.5 text-xs bg-indigo-500/50 border border-indigo-400/80 px-2.5 py-1 rounded-full text-indigo-100 font-medium select-none">
+                    <span id="cloudStatusPing" class="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></span>
+                    <span id="cloudStatusText" class="text-[10px] tracking-wide uppercase font-bold">Cloud Synced</span>
+                </div>
+                <div id="profileBadge" class="hidden items-center space-x-2 bg-indigo-700/85 px-3 py-1.5 rounded-xl border border-indigo-500/50 text-xs">
+                    <i class="fa-solid fa-user-circle text-sm text-indigo-200"></i>
+                    <span id="profileBadgeName" class="font-semibold truncate max-w-[80px]">User</span>
+                    <button onclick="app.handleSignOut()" class="text-indigo-300 hover:text-white transition pl-1 font-bold cursor-pointer" title="Sign Out">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+                <button onclick="app.resetAppConfirm()" class="text-xs bg-indigo-500/30 hover:bg-indigo-500/60 text-white font-semibold py-1.5 px-2.5 rounded-lg border border-indigo-400/30 transition-colors flex items-center gap-1 cursor-pointer">
+                    <i class="fa-solid fa-arrows-rotate"></i> Reset
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+        
+        <!-- Sidebar: Group Management Panel -->
+        <aside id="sidebarContainer" class="hidden md:flex flex-col md:col-span-1 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs h-fit">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-sm uppercase tracking-wider text-slate-400">My Groups</h2>
+                <button onclick="app.showGroupModal()" class="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg p-1.5 transition-all cursor-pointer flex items-center justify-center" title="Create Group">
+                    <i class="fa-solid fa-plus text-lg"></i>
+                </button>
+            </div>
+            
+            <div id="groupList" class="space-y-1.5 max-h-[300px] md:max-h-[500px] overflow-y-auto pr-1">
+                <!-- Dynamic Groups list injected here -->
+            </div>
+        </aside>
+
+        <!-- Dashboard Display Panel -->
+        <section id="dashboardView" class="col-span-1 md:col-span-3 space-y-6">
+            <!-- Loading Skeletons State -->
+            <div id="loadingState" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
+                <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+                <h3 class="text-lg font-bold text-slate-700">Connecting to Cloud Storage...</h3>
+                <p class="text-slate-400 text-xs mt-1.5">Synchronizing your expense circles and real-time balances.</p>
+            </div>
+
+            <!-- Empty State layout shown when no group selected -->
+            <div id="emptyState" class="hidden bg-white rounded-2xl border border-slate-200/80 shadow-xs p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
+                <div class="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mb-5 rotate-3 hover:rotate-0 transition-transform duration-300">
+                    <i class="fa-solid fa-scale-balanced text-4xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-800 mb-1.5">No Circle Selected</h3>
+                <p class="text-slate-500 mb-6 max-w-md mx-auto text-sm leading-relaxed">Select an active sharing circle from the sidebar, or create a brand new group with friends to begin tracking expenses.</p>
+                <div class="flex flex-col sm:flex-row justify-center gap-2.5 w-full max-w-sm">
+                    <button onclick="app.showGroupModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-5 rounded-xl transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 text-sm">
+                        <i class="fa-solid fa-circle-plus"></i> Create New Group
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Group Workspace -->
+            <div id="activeGroupContent" class="hidden space-y-6">
+                <!-- Group Identity Header -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="space-y-1 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                            <h2 id="activeGroupName" class="text-2xl font-bold text-slate-800 tracking-tight">Group Name</h2>
+                            <!-- Edit Circle Button (ONLY visible to Group Creator) -->
+                            <button id="editGroupBtn" onclick="app.showGroupModalForEdit()" class="hidden text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center" title="Edit Group (Creator Only)">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                        </div>
+                        <p id="activeGroupMembersList" class="text-xs text-slate-400 font-medium">Members: Loading...</p>
+                        <!-- Share ID badge -->
+                        <div class="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-md mt-1.5 cursor-pointer" onclick="app.copyGroupIdToClipboard()" title="Click to copy Group ID">
+                            <span>ID: <span id="activeGroupIdText" class="font-mono">ID</span></span>
+                            <i class="fa-regular fa-copy ml-1"></i>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2.5 shrink-0">
+                        <button onclick="app.exportGroupReport()" class="border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all flex items-center gap-2 cursor-pointer shadow-xs">
+                            <i class="fa-solid fa-file-export text-indigo-500"></i> Export Report
+                        </button>
+                        <button onclick="app.showSettleUpModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-all flex items-center gap-2 cursor-pointer shadow-sm">
+                            <i class="fa-solid fa-handshake"></i> Settle Up
+                        </button>
+                        <button onclick="app.showExpenseModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-all flex items-center gap-2 cursor-pointer shadow-sm">
+                            <i class="fa-solid fa-plus-circle text-base"></i> Add Expense
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Balance Breakdown & Optimization Grid -->
+                <div id="balancesSection" class="hidden md:grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Column 1: Standard Individual Balances Ledger -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-scale-unbalanced-flip text-indigo-500"></i> Member Balances
+                            </h3>
+                            <span class="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-sm">NET</span>
+                        </div>
+                        <div id="balancesContainer" class="space-y-3">
+                            <!-- Populated dynamically via JS calculations -->
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Optimal Settlements -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-wand-magic-sparkles text-emerald-500"></i> Optimized Settlements
+                            </h3>
+                            <span class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-sm">SMART SPLIT</span>
+                        </div>
+                        <div id="settlementsContainer" class="space-y-3">
+                            <!-- Populated dynamically via JS calculations -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transaction Ledger Logs list -->
+                <div id="expensesSection" class="hidden md:block bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                        <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wider">Expense History</h3>
+                        <span id="expenseCountBadge" class="text-xs font-semibold bg-indigo-50 text-indigo-600 px-2.5 py-0.5 rounded-full">0 entries</span>
+                    </div>
+                    <div id="expensesHistoryList" class="divide-y divide-slate-100 max-h-[450px] overflow-y-auto">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Premium Native Bottom Navigation Bar for Mobile -->
+    <div id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/80 z-40 flex justify-around py-2.5 shadow-lg">
+        <button onclick="app.setMobileTab('groups')" id="mobileTab-groups" class="flex flex-col items-center justify-center text-indigo-600 font-extrabold text-[11px] transition-colors flex-1">
+            <i class="fa-solid fa-folder text-lg mb-1"></i>
+            <span>Groups</span>
+        </button>
+        <button onclick="app.setMobileTab('balances')" id="mobileTab-balances" class="flex flex-col items-center justify-center text-slate-400 font-medium text-[11px] transition-colors flex-1">
+            <i class="fa-solid fa-scale-balanced text-lg mb-1"></i>
+            <span>Balances</span>
+        </button>
+        <button onclick="app.setMobileTab('expenses')" id="mobileTab-expenses" class="flex flex-col items-center justify-center text-slate-400 font-medium text-[11px] transition-colors flex-1">
+            <i class="fa-solid fa-receipt text-lg mb-1"></i>
+            <span>Expenses</span>
+        </button>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="hidden md:block bg-slate-100 text-slate-400 text-center py-4 text-xs border-t border-slate-200/50 mt-8">
+        <p>© 2026 FairShare. Multi-device cloud storage splitter with optimized split calculations.</p>
+    </footer>
+
+    <!-- PROFILE / REGISTRATION LANDING MODAL (STOPS ACTIONS UNTIL ACCOUNT LINKED) -->
+    <div id="authProfileModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200/85 max-w-md w-full overflow-hidden transform scale-95 opacity-0 transition-all duration-300" id="authProfileModalCard">
+            <div class="bg-indigo-600 text-white p-6 text-center relative overflow-hidden">
+                <div class="relative z-10 space-y-1">
+                    <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-2 border border-white/10">
+                        <i class="fa-solid fa-cloud-arrow-up text-white"></i>
+                    </div>
+                    <h3 class="font-black text-xl tracking-tight">Access FairShare Cloud</h3>
+                    <p class="text-indigo-100 text-xs leading-relaxed max-w-xs mx-auto">Link your name and phone number to sync your balances instantly across any mobile or desktop screen.</p>
+                </div>
+                <div class="absolute right-4 bottom-0 text-indigo-500/20 text-8xl font-bold z-0 pointer-events-none">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+            </div>
+            <form onsubmit="app.handleAuthSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">My Full Name</label>
+                    <input type="text" id="authNameInput" required placeholder="e.g., Srinadh" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">My Mobile Phone Number</label>
+                    <input type="tel" id="authPhoneInput" required placeholder="e.g., +15550100" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-semibold font-mono">
+                    <p class="text-slate-400 text-[10px] mt-1.5 leading-relaxed">Enter your phone number (numbers and optional country prefix '+'). Friends will use this exact number to invite you.</p>
+                </div>
+                <button type="submit" id="authSubmitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-4 rounded-xl transition shadow-md cursor-pointer text-sm">
+                    Enter Dashboard
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- DYNAMIC POPUPS & MODALS CONTAINER -->
+    <div id="modalOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-30 hidden flex items-center justify-center p-4 transition-all duration-300">
+        
+        <!-- Modal: Group Builder with Advanced Phone-Invites List -->
+        <div id="groupModal" class="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-lg w-full overflow-hidden hidden transform transition-all duration-300 scale-95 opacity-0">
+            <div class="bg-indigo-600 text-white px-5 py-4 flex justify-between items-center">
+                <h3 id="groupModalTitle" class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-users"></i> Create New Circle</h3>
+                <button onclick="app.closeModal()" class="text-white/80 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="app.handleCreateGroup(event)" class="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                <!-- Group Modification Safety Warning Banner -->
+                <div id="groupEditWarning" class="hidden bg-amber-50 border border-amber-200 text-amber-800 text-[11px] p-3 rounded-xl leading-relaxed mb-1">
+                    <div class="font-extrabold flex items-center gap-1.5 mb-0.5"><i class="fa-solid fa-circle-exclamation text-xs text-amber-600 animate-pulse"></i> Attention Owner:</div>
+                    Renaming or removing members with existing expenses can alter calculations. It is recommended to settle up all outstanding balances before changing member identities.
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Circle/Group Title</label>
+                    <input type="text" id="groupNameInput" required placeholder="e.g., Tahoe Cabin Trip 🌲" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                
+                <div class="border-t border-slate-100 pt-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Circle Members</label>
+                        <button type="button" onclick="app.addGroupMemberRow('', '')" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-plus-circle"></i> Add Friend
+                        </button>
+                    </div>
+                    <!-- Dynamically Generated member cards with input fields -->
+                    <div id="groupMembersInputsContainer" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        <!-- Instantiated via script -->
+                    </div>
+                </div>
+
+                <!-- Joint Existing Circle Code Row alternative -->
+                <div class="border-t border-slate-100 pt-3">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Already invited? Join by Group ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="joinGroupIdInput" placeholder="Paste shared Group ID here" class="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-mono">
+                        <button type="button" onclick="app.handleJoinByGroupId()" class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold px-3 py-2 rounded-xl hover:bg-indigo-100 transition cursor-pointer">Join Circle</button>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 font-sans">
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer">Cancel</button>
+                    <button type="submit" id="groupModalSubmitBtn" class="px-5 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition shadow-sm cursor-pointer">Build Shared Circle</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Modal: Add / Edit Expense Panel -->
+        <div id="expenseModal" class="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-lg w-full overflow-hidden hidden transform transition-all duration-300 scale-95 opacity-0">
+            <div class="bg-indigo-600 text-white px-5 py-4 flex justify-between items-center">
+                <h3 id="expenseModalTitle" class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-receipt"></i> Log Expense Entry</h3>
+                <button onclick="app.closeModal()" class="text-white/80 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="app.handleCreateExpense(event)" class="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">What was this for?</label>
+                        <input type="text" id="expenseDescInput" required placeholder="e.g., Dinner, Gasoline, Groceries" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Total Cost ($)</label>
+                        <input type="number" id="expenseAmountInput" min="0.01" step="0.01" required placeholder="0.00" oninput="app.validateAndRenderModalFeedback()" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                </div>
+
+                <!-- Multiple Payers Selection Strategy UI -->
+                <div class="border-t border-slate-100 pt-3">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Who Paid?</label>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <button type="button" id="payerToggleSingle" onclick="app.setPayerType('single')" class="py-2 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer bg-indigo-50 border-indigo-200 text-indigo-700">Single Payer</button>
+                        <button type="button" id="payerToggleMultiple" onclick="app.setPayerType('multiple')" class="py-2 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer bg-white border-slate-200 text-slate-600">Multiple People</button>
+                    </div>
+                    
+                    <!-- Single Payer Dropdown -->
+                    <div id="singlePayerContainer">
+                        <select id="expensePayerSelect" class="w-full px-3.5 py-2.5 border border-slate-200 bg-white rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Multiple Payers Distribution Grid -->
+                    <div id="multiplePayersContainer" class="hidden space-y-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50 max-h-36 overflow-y-auto">
+                        <!-- Populated dynamically -->
+                    </div>
+                    <p id="payerValidationMessage" class="hidden text-[11px] mt-1.5 font-bold"></p>
+                </div>
+                
+                <!-- Splitting Mechanics Tabs -->
+                <div class="border-t border-slate-100 pt-3">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Split Method</label>
+                    <div class="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl mb-3">
+                        <button type="button" onclick="app.setSplitMethod('equal')" id="splitTab-equal" class="flex-1 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer text-center">Equally</button>
+                        <button type="button" onclick="app.setSplitMethod('shares')" id="splitTab-shares" class="flex-1 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer text-center">Shares</button>
+                        <button type="button" onclick="app.setSplitMethod('percentage')" id="splitTab-percentage" class="flex-1 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer text-center">Percentages</button>
+                        <button type="button" onclick="app.setSplitMethod('exact')" id="splitTab-exact" class="flex-1 py-1.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer text-center">Exact ($)</button>
+                    </div>
+
+                    <!-- Dynamic Splitting Fields Inputs Container -->
+                    <div id="splitInputsContainer" class="space-y-2 max-h-48 overflow-y-auto border border-slate-100 rounded-xl p-3 bg-slate-50/50">
+                        <!-- Populated dynamically based on split method selected -->
+                    </div>
+                    <p id="splitValidationMessage" class="hidden text-[11px] mt-1.5 font-bold"></p>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer">Cancel</button>
+                    <button type="submit" id="saveExpenseBtn" class="px-5 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition shadow-sm cursor-pointer">Save Expense</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Modal: Settle Up Panel -->
+        <div id="settleUpModal" class="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-md w-full overflow-hidden hidden transform transition-all duration-300 scale-95 opacity-0">
+            <div class="bg-emerald-600 text-white px-5 py-4 flex justify-between items-center">
+                <h3 id="settleUpModalTitle" class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-handshake"></i> Settle Up Payment</h3>
+                <button onclick="app.closeModal()" class="text-white/80 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="app.handleCreateSettlement(event)" class="p-5 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Who Paid?</label>
+                        <select id="settlePayerSelect" required class="w-full px-3.5 py-2.5 border border-slate-200 bg-white rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-sm">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Who was Paid?</label>
+                        <select id="settleReceiverSelect" required class="w-full px-3.5 py-2.5 border border-slate-200 bg-white rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-sm">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Amount Sent ($)</label>
+                    <input type="number" id="settleAmountInput" min="0.01" step="0.01" required placeholder="0.00" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer">Cancel</button>
+                    <button type="submit" id="saveSettleUpBtn" class="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition shadow-sm cursor-pointer font-medium">Record Settlement</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Custom Warning Alert / Confirmation Modal UI -->
+        <div id="confirmModal" class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-sm w-full overflow-hidden hidden transform transition-all duration-300 scale-95 opacity-0">
+            <div class="p-5 text-center">
+                <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fa-solid fa-triangle-exclamation text-xl animate-bounce"></i>
+                </div>
+                <h4 id="confirmModalTitle" class="text-lg font-bold text-slate-800 mb-1">Are you sure?</h4>
+                <p id="confirmModalText" class="text-sm text-slate-500 leading-relaxed font-medium">This change cannot be undone.</p>
+            </div>
+            <div class="bg-slate-50 px-5 py-3.5 flex justify-end gap-2 border-t border-slate-100">
+                <button id="confirmCancelBtn" class="px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-200/60 rounded-lg transition cursor-pointer">Cancel</button>
+                <button id="confirmProceedBtn" class="px-4 py-2 text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 rounded-lg transition shadow-sm cursor-pointer">Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Toast Notifications Container -->
+    <div id="toastContainer" class="fixed bottom-20 md:bottom-4 right-4 z-50 space-y-2 pointer-events-none max-w-sm w-full font-sans"></div>
+
+    <!-- FIREBASE AND CLIENT ENGINE DRIVERS (ES MOUNTED) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Safeguard global parameters injected from hosting shell environments
+        const firebaseConfigRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+        const app_id = typeof __app_id !== 'undefined' ? __app_id : 'fairshare-cloud';
+        
+        let firebaseApp = null;
+        let auth = null;
+        let db = null;
+        let isCloudSupported = false;
+
+        if (firebaseConfigRaw) {
+            try {
+                const parsedConfig = JSON.parse(firebaseConfigRaw);
+                firebaseApp = initializeApp(parsedConfig);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                isCloudSupported = true;
+            } catch (err) {
+                console.error("Firebase Initialization Failure:", err);
+            }
+        }
+
+        class FairShareApp {
+            constructor() {
+                this.db = db;
+                this.auth = auth;
+                this.appId = app_id;
+                this.isCloudSupported = isCloudSupported;
+
+                this.activeGroupId = null;
+                this.activeMobileTab = 'groups'; // 'groups', 'balances', 'expenses'
+                this.currentUserProfile = null; // { name, phone, uid }
+                this.allGroups = []; // Dynamic memory cache of groups
+
+                // Editing trackers
+                this.editingExpenseId = null;
+                this.editingSettlementId = null;
+                this.editingGroupId = null; // Track circle details editing state
+
+                // Active Layout Element Handlers Caches
+                this.groupListEl = document.getElementById('groupList');
+                this.emptyStateEl = document.getElementById('emptyState');
+                this.loadingStateEl = document.getElementById('loadingState');
+                this.activeGroupContentEl = document.getElementById('activeGroupContent');
+                this.activeGroupNameEl = document.getElementById('activeGroupName');
+                this.activeGroupMembersListEl = document.getElementById('activeGroupMembersList');
+                this.balancesContainerEl = document.getElementById('balancesContainer');
+                this.settlementsContainerEl = document.getElementById('settlementsContainer');
+                this.expensesHistoryListEl = document.getElementById('expensesHistoryList');
+                this.expenseCountBadge = document.getElementById('expenseCountBadge');
+
+                // Modal Elements Caches
+                this.modalOverlay = document.getElementById('modalOverlay');
+                this.groupModal = document.getElementById('groupModal');
+                this.expenseModal = document.getElementById('expenseModal');
+                this.settleUpModal = document.getElementById('settleUpModal');
+                this.confirmModal = document.getElementById('confirmModal');
+                this.authProfileModal = document.getElementById('authProfileModal');
+            }
+
+            async start() {
+                if (this.isCloudSupported) {
+                    // Rule 3: Auth Before Queries. Force anonymous/custom auth immediately on start.
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(this.auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(this.auth);
+                        }
+                    } catch (err) {
+                        console.error("Auth Failure on startup: ", err);
+                        this.showToast("Connection to authentication node failed.", "error");
+                    }
+
+                    // Setup listener tracking user auth transitions
+                    onAuthStateChanged(this.auth, (user) => {
+                        if (user) {
+                            this.onUserAuthenticated(user);
+                        }
+                    });
+                } else {
+                    // Self-healing Local Fallback Routing for isolated previews
+                    this.onLocalFallbackInit();
+                }
+            }
+
+            onLocalFallbackInit() {
+                // Update Badge UI to inform user they are playing in sandbox mode
+                document.getElementById('cloudStatusText').innerHTML = `<i class="fa-solid fa-laptop"></i> Sandbox Mode`;
+                document.getElementById('cloudStatusPing').className = "w-2 h-2 bg-amber-400 rounded-full";
+                document.getElementById('cloudStatusBadge').classList.remove('hidden');
+                document.getElementById('cloudStatusBadge').classList.add('inline-flex');
+
+                this.loadingStateEl.classList.add('hidden');
+                
+                // Load local profile data
+                const localProfile = localStorage.getItem('fairshare_cloud_profile');
+                if (localProfile) {
+                    this.currentUserProfile = JSON.parse(localProfile);
+                    this.onProfileComplete();
+                } else {
+                    // Display landing screen profile setup modal
+                    this.authProfileModal.classList.remove('hidden');
+                    const authModalCard = document.getElementById('authProfileModalCard');
+                    setTimeout(() => {
+                        authModalCard.classList.remove('scale-95', 'opacity-0');
+                    }, 10);
+                }
+            }
+
+            onUserAuthenticated(user) {
+                const localProfile = localStorage.getItem('fairshare_cloud_profile');
+                if (localProfile) {
+                    this.currentUserProfile = JSON.parse(localProfile);
+                    this.currentUserProfile.uid = user.uid; // Update latest uid driver
+                    
+                    this.updateUserProfileInCloud(this.currentUserProfile);
+                    this.onProfileComplete();
+                } else {
+                    this.loadingStateEl.classList.add('hidden');
+                    this.authProfileModal.classList.remove('hidden');
+                    const authModalCard = document.getElementById('authProfileModalCard');
+                    setTimeout(() => {
+                        authModalCard.classList.remove('scale-95', 'opacity-0');
+                    }, 10);
+                }
+            }
+
+            async updateUserProfileInCloud(profile) {
+                if (!this.isCloudSupported || !this.auth.currentUser) return;
+                try {
+                    const userRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'users', profile.phone);
+                    await setDoc(userRef, {
+                        uid: profile.uid,
+                        name: profile.name,
+                        phone: profile.phone,
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                } catch (e) {
+                    console.error("Failed to sync profile to cloud: ", e);
+                }
+            }
+
+            handleAuthSubmit(e) {
+                e.preventDefault();
+                const name = document.getElementById('authNameInput').value.trim();
+                const rawPhone = document.getElementById('authPhoneInput').value.trim();
+                const phone = rawPhone.replace(/[^\d+]/g, '');
+
+                if (phone.length < 5) {
+                    this.showToast("Please provide a valid mobile phone number.", "error");
+                    return;
+                }
+
+                const profile = {
+                    name,
+                    phone,
+                    uid: (this.isCloudSupported && this.auth.currentUser) ? this.auth.currentUser.uid : 'local-user'
+                };
+
+                localStorage.setItem('fairshare_cloud_profile', JSON.stringify(profile));
+                this.currentUserProfile = profile;
+
+                if (this.isCloudSupported) {
+                    this.updateUserProfileInCloud(profile);
+                }
+                
+                const authModalCard = document.getElementById('authProfileModalCard');
+                authModalCard.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                    this.authProfileModal.classList.add('hidden');
+                    this.onProfileComplete();
+                }, 150);
+            }
+
+            handleSignOut() {
+                this.showConfirm(
+                    "Sign Out Profile?",
+                    "This will log you out of this profile on this device. You can log back in anytime using your phone number.",
+                    () => {
+                        localStorage.removeItem('fairshare_cloud_profile');
+                        localStorage.removeItem('fairshare_local_groups_fallback');
+                        this.currentUserProfile = null;
+                        this.allGroups = [];
+                        this.activeGroupId = null;
+                        this.resetView();
+                        location.reload();
+                    }
+                );
+            }
+
+            onProfileComplete() {
+                document.getElementById('cloudStatusBadge').classList.remove('hidden');
+                document.getElementById('cloudStatusBadge').classList.add('inline-flex');
+                document.getElementById('profileBadge').classList.remove('hidden');
+                document.getElementById('profileBadge').classList.add('inline-flex');
+                document.getElementById('profileBadgeName').textContent = this.currentUserProfile.name;
+
+                this.loadingStateEl.classList.remove('hidden');
+                this.emptyStateEl.classList.add('hidden');
+                this.activeGroupContentEl.classList.add('hidden');
+
+                if (this.isCloudSupported) {
+                    this.startCloudRealTimeSubscription();
+                } else {
+                    // Populate local storage sandbox dataset
+                    this.allGroups = this.loadLocalState();
+                    this.loadingStateEl.classList.add('hidden');
+                    this.renderGroupSidebar();
+                    if (this.allGroups.length > 0) {
+                        this.selectGroup(this.allGroups[0].id);
+                    } else {
+                        this.resetView();
+                    }
+                }
+            }
+
+            startCloudRealTimeSubscription() {
+                const groupsCol = collection(this.db, 'artifacts', this.appId, 'public', 'data', 'groups');
+
+                onSnapshot(groupsCol, (snapshot) => {
+                    const fetchedGroups = [];
+                    snapshot.forEach(doc => {
+                        fetchedGroups.push(doc.data());
+                    });
+
+                    this.allGroups = fetchedGroups;
+                    this.loadingStateEl.classList.add('hidden');
+
+                    this.renderGroupSidebar();
+                    if (this.activeGroupId) {
+                        this.renderActiveGroup();
+                    } else if (this.allGroups.length > 0) {
+                        const filtered = this.getMyFilteredGroups();
+                        if (filtered.length > 0 && !this.activeGroupId) {
+                            this.selectGroup(filtered[0].id);
+                        } else {
+                            this.resetView();
+                        }
+                    } else {
+                        this.resetView();
+                    }
+                }, (error) => {
+                    console.error("Firestore database stream failed: ", error);
+                    this.showToast("Cloud synchronization interrupted. Check connection.", "error");
+                });
+            }
+
+            getMyFilteredGroups() {
+                if (!this.currentUserProfile) return [];
+                const userPhone = this.currentUserProfile.phone;
+                const userUid = this.currentUserProfile.uid;
+
+                return this.allGroups.filter(group => {
+                    const isCreator = group.createdBy === userUid;
+                    const isInvited = group.members && group.members.some(m => m.phone === userPhone);
+                    return isCreator || isInvited;
+                });
+            }
+
+            // --- Database Abstraction Layer Wrappers (Supports unified Local & Cloud CRUD queries) ---
+            async createGroup(name, members) {
+                const newId = 'group_' + Date.now();
+                const newGroup = {
+                    id: newId,
+                    name: name,
+                    members: members,
+                    expenses: [],
+                    createdBy: (this.isCloudSupported && this.auth.currentUser) ? this.auth.currentUser.uid : 'local-user',
+                    createdAt: Date.now()
+                };
+
+                if (this.isCloudSupported) {
+                    const newGroupRef = doc(collection(this.db, 'artifacts', this.appId, 'public', 'data', 'groups'), newId);
+                    newGroup.id = newGroupRef.id;
+                    await setDoc(newGroupRef, newGroup);
+                } else {
+                    this.allGroups.push(newGroup);
+                    this.saveLocalState();
+                }
+                return newGroup.id;
+            }
+
+            async updateGroup(groupId, fieldsToUpdate) {
+                if (this.isCloudSupported) {
+                    const groupDocRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'groups', groupId);
+                    await updateDoc(groupDocRef, fieldsToUpdate);
+                } else {
+                    const index = this.allGroups.findIndex(g => g.id === groupId);
+                    if (index > -1) {
+                        this.allGroups[index] = { ...this.allGroups[index], ...fieldsToUpdate };
+                        this.saveLocalState();
+                    }
+                }
+            }
+
+            async deleteGroupData(groupId) {
+                if (this.isCloudSupported) {
+                    const groupDocRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'groups', groupId);
+                    await deleteDoc(groupDocRef);
+                } else {
+                    this.allGroups = this.allGroups.filter(g => g.id !== groupId);
+                    this.saveLocalState();
+                }
+            }
+
+            saveLocalState() {
+                localStorage.setItem('fairshare_local_groups_fallback', JSON.stringify({ groups: this.allGroups }));
+                this.renderGroupSidebar();
+                if (this.activeGroupId) {
+                    this.renderActiveGroup();
+                }
+            }
+
+            loadLocalState() {
+                const raw = localStorage.getItem('fairshare_local_groups_fallback');
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        return parsed.groups || [];
+                    } catch (e) {
+                        console.error("Local recovery failure: ", e);
+                    }
+                }
+                
+                // Pre-populate offline standard sandbox details immediately on clean starts
+                const myName = this.currentUserProfile ? this.currentUserProfile.name : 'Srinadh';
+                const myPhone = this.currentUserProfile ? this.currentUserProfile.phone : '+15550100';
+
+                return [
+                    {
+                        id: 'demo_tahoe_trip',
+                        name: 'Tahoe Cabin Trip 🌲',
+                        createdBy: 'local-user',
+                        createdAt: Date.now(),
+                        members: [
+                            { name: myName, phone: myPhone },
+                            { name: 'Snigdha', phone: '+15550200' },
+                            { name: 'Sikhara', phone: '+15550300' },
+                            { name: 'Sisira', phone: '+15550400' }
+                        ],
+                        expenses: [
+                            {
+                                id: 'demo_exp_1',
+                                description: 'Premium Luxury Cabin AirBnb',
+                                totalAmount: 1200.00,
+                                paidBy: { [myName]: 1200.00 },
+                                splits: { [myName]: 300, 'Snigdha': 300, 'Sikhara': 300, 'Sisira': 300 },
+                                splitMethod: 'equal',
+                                splitBetween: [myName, 'Snigdha', 'Sikhara', 'Sisira'],
+                                timestamp: 'May 24, 2026'
+                            },
+                            {
+                                id: 'demo_exp_2',
+                                description: 'Organic Snacks & Food Groceries',
+                                totalAmount: 240.00,
+                                paidBy: { 'Snigdha': 240.00 },
+                                splits: { [myName]: 60, 'Snigdha': 60, 'Sikhara': 60, 'Sisira': 60 },
+                                splitMethod: 'equal',
+                                splitBetween: [myName, 'Snigdha', 'Sikhara', 'Sisira'],
+                                timestamp: 'May 25, 2026'
+                            }
+                        ]
+                    }
+                ];
+            }
+
+            // --- UI Modal Toggle Management ---
+            showGroupModal() {
+                this.editingGroupId = null;
+                document.getElementById('groupModalTitle').innerHTML = '<i class="fa-solid fa-users"></i> Create New Circle';
+                document.getElementById('groupModalSubmitBtn').textContent = "Build Shared Circle";
+                document.getElementById('groupEditWarning').classList.add('hidden');
+
+                const container = document.getElementById('groupMembersInputsContainer');
+                container.innerHTML = '';
+                
+                this.addGroupMemberRow(this.currentUserProfile.name, this.currentUserProfile.phone, true);
+                this.addGroupMemberRow('', '');
+                this.addGroupMemberRow('', '');
+
+                this.modalOverlay.classList.remove('hidden');
+                this.groupModal.classList.remove('hidden');
+                setTimeout(() => {
+                    this.groupModal.classList.remove('scale-95', 'opacity-0');
+                }, 10);
+                document.getElementById('groupNameInput').focus();
+            }
+
+            showGroupModalForEdit() {
+                if (!this.activeGroupId) return;
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                const isCreator = !this.isCloudSupported || group.createdBy === (this.auth.currentUser ? this.auth.currentUser.uid : 'local-user');
+                if (!isCreator) {
+                    this.showToast("Only the group creator is authorized to modify group settings.", "error");
+                    return;
+                }
+
+                this.editingGroupId = this.activeGroupId;
+
+                document.getElementById('groupModalTitle').innerHTML = '<i class="fa-solid fa-users-gear"></i> Edit Circle Details';
+                document.getElementById('groupModalSubmitBtn').textContent = "Save Changes";
+                document.getElementById('groupEditWarning').classList.remove('hidden');
+
+                document.getElementById('groupNameInput').value = group.name;
+
+                const container = document.getElementById('groupMembersInputsContainer');
+                container.innerHTML = '';
+
+                group.members.forEach(m => {
+                    const isSelf = m.phone === this.currentUserProfile.phone;
+                    this.addGroupMemberRow(m.name, m.phone, isSelf);
+                });
+
+                this.modalOverlay.classList.remove('hidden');
+                this.groupModal.classList.remove('hidden');
+                setTimeout(() => {
+                    this.groupModal.classList.remove('scale-95', 'opacity-0');
+                }, 10);
+                document.getElementById('groupNameInput').focus();
+            }
+
+            addGroupMemberRow(name = '', phone = '', isSelf = false) {
+                const container = document.getElementById('groupMembersInputsContainer');
+                const row = document.createElement('div');
+                row.className = 'flex items-center space-x-2 bg-slate-50 border border-slate-200/50 p-2.5 rounded-xl mb-1';
+                
+                if (isSelf) {
+                    row.innerHTML = `
+                        <div class="flex-1">
+                            <input type="text" placeholder="Owner Name" value="${name}" disabled class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-100 text-slate-500 font-bold">
+                        </div>
+                        <div class="flex-1">
+                            <input type="text" placeholder="Phone" value="${phone}" disabled class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-100 text-slate-500 font-bold font-mono">
+                        </div>
+                        <div class="w-8 shrink-0 text-center text-indigo-600 font-extrabold text-[10px] select-none">
+                            Me
+                        </div>
+                    `;
+                } else {
+                    row.innerHTML = `
+                        <div class="flex-1">
+                            <input type="text" placeholder="Friend's Name" value="${name}" required class="member-name-input w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-hidden font-semibold text-slate-700">
+                        </div>
+                        <div class="flex-1">
+                            <input type="tel" placeholder="Phone (Invites)" value="${phone}" class="member-phone-input w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-hidden font-mono text-slate-700">
+                        </div>
+                        <button type="button" onclick="this.parentNode.remove()" class="w-8 h-8 shrink-0 text-slate-300 hover:text-rose-500 transition rounded-lg hover:bg-rose-50 flex items-center justify-center cursor-pointer">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    `;
+                }
+                container.appendChild(row);
+            }
+
+            showSettleUpModal(payerName = '', receiverName = '', amountVal = '') {
+                if (!this.activeGroupId) return;
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                const settlePayerSelect = document.getElementById('settlePayerSelect');
+                const settleReceiverSelect = document.getElementById('settleReceiverSelect');
+                const settleAmountInput = document.getElementById('settleAmountInput');
+
+                if (!payerName && !receiverName && !amountVal) {
+                    this.editingSettlementId = null;
+                }
+
+                if (!this.editingSettlementId) {
+                    document.getElementById('settleUpModalTitle').innerHTML = `<i class="fa-solid fa-handshake"></i> Settle Up Payment`;
+                    document.getElementById('saveSettleUpBtn').textContent = "Record Settlement";
+                }
+
+                settlePayerSelect.innerHTML = '';
+                group.members.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.name;
+                    opt.textContent = m.name;
+                    settlePayerSelect.appendChild(opt);
+                });
+
+                const populateReceivers = (excludeName) => {
+                    const currentSelection = settleReceiverSelect.value;
+                    settleReceiverSelect.innerHTML = '';
+                    group.members.forEach(m => {
+                        if (m.name !== excludeName) {
+                            const opt = document.createElement('option');
+                            opt.value = m.name;
+                            opt.textContent = m.name;
+                            settleReceiverSelect.appendChild(opt);
+                        }
+                    });
+                    if (currentSelection && currentSelection !== excludeName) {
+                        settleReceiverSelect.value = currentSelection;
+                    }
+                };
+
+                settlePayerSelect.onchange = (e) => {
+                    populateReceivers(e.target.value);
+                };
+
+                if (payerName) {
+                    settlePayerSelect.value = payerName;
+                }
+                
+                populateReceivers(settlePayerSelect.value);
+
+                if (receiverName && receiverName !== payerName) {
+                    settleReceiverSelect.value = receiverName;
+                }
+
+                if (amountVal) {
+                    settleAmountInput.value = parseFloat(amountVal).toFixed(2);
+                } else {
+                    settleAmountInput.value = '';
+                }
+
+                this.modalOverlay.classList.remove('hidden');
+                this.settleUpModal.classList.remove('hidden');
+                setTimeout(() => {
+                    this.settleUpModal.classList.remove('scale-95', 'opacity-0');
+                }, 10);
+                settleAmountInput.focus();
+            }
+
+            showSettleUpModalForEdit(expenseId) {
+                if (!this.activeGroupId) return;
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                const exp = group.expenses.find(e => e.id === expenseId);
+                if (!exp) return;
+
+                this.editingSettlementId = expenseId;
+
+                const payer = Object.keys(exp.paidBy || {})[0] || '';
+                const receiver = Object.keys(exp.splits || {})[0] || '';
+                const amount = exp.totalAmount;
+
+                this.showSettleUpModal(payer, receiver, amount);
+                
+                document.getElementById('settleUpModalTitle').innerHTML = `<i class="fa-solid fa-handshake"></i> Edit Settlement Payment`;
+                document.getElementById('saveSettleUpBtn').textContent = "Save Changes";
+            }
+
+            showExpenseModal() {
+                if (!this.activeGroupId) return;
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                this.editingExpenseId = null;
+                document.getElementById('expenseModalTitle').innerHTML = `<i class="fa-solid fa-receipt"></i> Log Expense Entry`;
+                document.getElementById('saveExpenseBtn').textContent = "Save Expense";
+
+                this.activePayerType = 'single';
+                this.activeSplitMethod = 'equal';
+                this.updatePayerTabStyles();
+                this.updateSplitTabStyles();
+
+                const payerSelect = document.getElementById('expensePayerSelect');
+                payerSelect.innerHTML = '';
+                group.members.forEach(member => {
+                    const opt = document.createElement('option');
+                    opt.value = member.name;
+                    opt.textContent = member.name;
+                    payerSelect.appendChild(opt);
+                });
+
+                payerSelect.onchange = () => this.validateAndRenderModalFeedback();
+
+                this.renderPayerInputs(group);
+                this.renderSplitInputs(group);
+
+                document.getElementById('singlePayerContainer').classList.remove('hidden');
+                document.getElementById('multiplePayersContainer').classList.add('hidden');
+
+                this.modalOverlay.classList.remove('hidden');
+                this.expenseModal.classList.remove('hidden');
+                setTimeout(() => {
+                    this.expenseModal.classList.remove('scale-95', 'opacity-0');
+                }, 10);
+                
+                document.getElementById('payerValidationMessage').classList.add('hidden');
+                document.getElementById('splitValidationMessage').classList.add('hidden');
+                document.getElementById('expenseDescInput').focus();
+            }
+
+            showExpenseModalForEdit(expenseId) {
+                if (!this.activeGroupId) return;
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                const exp = group.expenses.find(e => e.id === expenseId);
+                if (!exp) return;
+
+                this.editingExpenseId = expenseId;
+
+                document.getElementById('expenseModalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square"></i> Edit Expense Entry`;
+                document.getElementById('saveExpenseBtn').textContent = "Save Changes";
+
+                document.getElementById('expenseDescInput').value = exp.description;
+                document.getElementById('expenseAmountInput').value = exp.totalAmount;
+
+                const payerKeys = Object.keys(exp.paidBy || {}).filter(k => exp.paidBy[k] > 0.01);
+                if (payerKeys.length <= 1) {
+                    this.activePayerType = 'single';
+                    const payerSelect = document.getElementById('expensePayerSelect');
+                    payerSelect.innerHTML = '';
+                    group.members.forEach(member => {
+                        const opt = document.createElement('option');
+                        opt.value = member.name;
+                        opt.textContent = member.name;
+                        payerSelect.appendChild(opt);
+                    });
+                    payerSelect.value = payerKeys[0] || group.members[0].name;
+                } else {
+                    this.activePayerType = 'multiple';
+                }
+                this.updatePayerTabStyles();
+
+                const singleCont = document.getElementById('singlePayerContainer');
+                const multiCont = document.getElementById('multiplePayersContainer');
+                if (this.activePayerType === 'single') {
+                    singleCont.classList.remove('hidden');
+                    multiCont.classList.add('hidden');
+                } else {
+                    singleCont.classList.add('hidden');
+                    multiCont.classList.remove('hidden');
+                }
+
+                this.renderPayerInputs(group);
+                if (this.activePayerType === 'multiple') {
+                    group.members.forEach(m => {
+                        const val = exp.paidBy[m.name] || 0;
+                        const input = document.getElementById(`payer-input-${m.name}`);
+                        if (input) input.value = val > 0 ? val : '';
+                    });
+                }
+
+                this.activeSplitMethod = exp.splitMethod || 'equal';
+                this.updateSplitTabStyles();
+                this.renderSplitInputs(group);
+
+                if (this.activeSplitMethod === 'equal') {
+                    let checkedMembers = [];
+                    if (exp.splitInputs && exp.splitInputs.checked) {
+                        checkedMembers = exp.splitInputs.checked;
+                    } else if (exp.splits) {
+                        checkedMembers = Object.keys(exp.splits).filter(k => exp.splits[k] > 0.01);
+                    } else {
+                        checkedMembers = exp.splitBetween || [];
+                    }
+
+                    group.members.forEach(m => {
+                        const cb = document.querySelector(`input[name="splitEqualMembers"][value="${m.name}"]`);
+                        if (cb) cb.checked = checkedMembers.includes(m.name);
+                    });
+                } else if (this.activeSplitMethod === 'shares') {
+                    group.members.forEach(m => {
+                        const input = document.getElementById(`share-input-${m.name}`);
+                        if (input) {
+                            if (exp.splitInputs && exp.splitInputs[m.name] !== undefined) {
+                                input.value = exp.splitInputs[m.name];
+                            } else if (exp.splits) {
+                                input.value = exp.splits[m.name] > 0 ? 1 : 0;
+                            }
+                        }
+                    });
+                } else if (this.activeSplitMethod === 'percentage') {
+                    group.members.forEach(m => {
+                        const input = document.getElementById(`percentage-input-${m.name}`);
+                        if (input) {
+                            if (exp.splitInputs && exp.splitInputs[m.name] !== undefined) {
+                                input.value = exp.splitInputs[m.name];
+                            } else if (exp.splits && exp.totalAmount > 0) {
+                                input.value = Math.round((exp.splits[m.name] / exp.totalAmount) * 100);
+                            }
+                        }
+                    });
+                } else if (this.activeSplitMethod === 'exact') {
+                    group.members.forEach(m => {
+                        const input = document.getElementById(`exact-input-${m.name}`);
+                        if (input) {
+                            if (exp.splitInputs && exp.splitInputs[m.name] !== undefined) {
+                                input.value = exp.splitInputs[m.name] > 0 ? exp.splitInputs[m.name] : '';
+                            } else if (exp.splits) {
+                                input.value = exp.splits[m.name] > 0 ? exp.splits[m.name] : '';
+                            }
+                        }
+                    });
+                }
+
+                this.modalOverlay.classList.remove('hidden');
+                this.expenseModal.classList.remove('hidden');
+                setTimeout(() => {
+                    this.expenseModal.classList.remove('scale-95', 'opacity-0');
+                }, 10);
+
+                this.validateAndRenderModalFeedback();
+            }
+
+            setPayerType(type) {
+                this.activePayerType = type;
+                this.updatePayerTabStyles();
+                
+                const singleCont = document.getElementById('singlePayerContainer');
+                const multiCont = document.getElementById('multiplePayersContainer');
+                
+                if (type === 'single') {
+                    singleCont.classList.remove('hidden');
+                    multiCont.classList.add('hidden');
+                } else {
+                    singleCont.classList.add('hidden');
+                    multiCont.classList.remove('hidden');
+                }
+                
+                this.validateAndRenderModalFeedback();
+            }
+
+            updatePayerTabStyles() {
+                const singleBtn = document.getElementById('payerToggleSingle');
+                const multiBtn = document.getElementById('payerToggleMultiple');
+                
+                if (this.activePayerType === 'single') {
+                    singleBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer bg-indigo-50 border-indigo-200 text-indigo-700";
+                    multiBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
+                } else {
+                    singleBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
+                    multiBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer bg-indigo-50 border-indigo-200 text-indigo-700";
+                }
+            }
+
+            setSplitMethod(method) {
+                this.activeSplitMethod = method;
+                this.updateSplitTabStyles();
+                
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (group) {
+                    this.renderSplitInputs(group);
+                }
+                this.validateAndRenderModalFeedback();
+            }
+
+            updateSplitTabStyles() {
+                const methods = ['equal', 'shares', 'percentage', 'exact'];
+                methods.forEach(m => {
+                    const tab = document.getElementById(`splitTab-${m}`);
+                    if (m === this.activeSplitMethod) {
+                        tab.className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer text-center bg-white text-indigo-700 shadow-2xs";
+                    } else {
+                        tab.className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer text-center text-slate-500 hover:text-slate-800 hover:bg-white/40";
+                    }
+                });
+            }
+
+            renderPayerInputs(group) {
+                const container = document.getElementById('multiplePayersContainer');
+                container.innerHTML = '';
+                group.members.forEach(member => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center space-x-3 py-1';
+                    row.innerHTML = `
+                        <span class="text-sm text-slate-700 font-semibold truncate">${member.name}</span>
+                        <div class="relative rounded-lg shadow-2xs">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                                <span class="text-xs text-slate-400">$</span>
+                            </div>
+                            <input type="number" step="0.01" min="0" id="payer-input-${member.name}" oninput="app.validateAndRenderModalFeedback()" placeholder="0.00" class="w-28 pl-6 pr-2 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                    `;
+                    container.appendChild(row);
+                });
+            }
+
+            renderSplitInputs(group) {
+                const container = document.getElementById('splitInputsContainer');
+                container.innerHTML = '';
+
+                group.members.forEach(member => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center space-x-3 py-1.5 border-b border-slate-100 last:border-0';
+
+                    if (this.activeSplitMethod === 'equal') {
+                        row.innerHTML = `
+                            <label class="flex items-center space-x-3 text-sm cursor-pointer select-none w-full">
+                                <input type="checkbox" name="splitEqualMembers" value="${member.name}" checked onchange="app.validateAndRenderModalFeedback()" class="rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 cursor-pointer">
+                                <span class="text-slate-700 font-medium">${member.name}</span>
+                            </label>
+                            <span id="equal-share-preview-${member.name}" class="text-xs text-slate-400 font-semibold shrink-0">$0.00</span>
+                        `;
+                    } else if (this.activeSplitMethod === 'shares') {
+                        row.innerHTML = `
+                            <span class="text-sm text-slate-700 font-semibold truncate">${member.name}</span>
+                            <div class="flex items-center space-x-2">
+                                <input type="number" step="1" min="0" id="share-input-${member.name}" value="1" oninput="app.validateAndRenderModalFeedback()" class="w-16 px-2 py-1 border border-slate-200 rounded-lg text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-bold font-mono">
+                                <span class="text-[10px] text-slate-400 font-bold">share(s)</span>
+                                <span id="shares-share-preview-${member.name}" class="text-xs text-indigo-600 font-bold w-20 text-right">$0.00</span>
+                            </div>
+                        `;
+                    } else if (this.activeSplitMethod === 'percentage') {
+                        row.innerHTML = `
+                            <span class="text-sm text-slate-700 font-semibold truncate">${member.name}</span>
+                            <div class="flex items-center space-x-2">
+                                <div class="relative rounded-lg">
+                                    <input type="number" step="1" min="0" max="100" id="percentage-input-${member.name}" placeholder="0" oninput="app.validateAndRenderModalFeedback()" class="w-20 pr-5 pl-2 py-1 border border-slate-200 rounded-lg text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-bold font-mono">
+                                    <span class="absolute right-2 top-1.5 text-[10px] text-slate-400 font-bold">%</span>
+                                </div>
+                                <span id="percentage-share-preview-${member.name}" class="text-xs text-indigo-600 font-bold w-20 text-right">$0.00</span>
+                            </div>
+                        `;
+                    } else if (this.activeSplitMethod === 'exact') {
+                        row.innerHTML = `
+                            <span class="text-sm text-slate-700 font-semibold truncate">${member.name}</span>
+                            <div class="relative rounded-lg shadow-2xs">
+                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                                    <span class="text-xs text-slate-400">$</span>
+                                </div>
+                                <input type="number" step="0.01" min="0" id="exact-input-${member.name}" placeholder="0.00" oninput="app.validateAndRenderModalFeedback()" class="w-28 pl-6 pr-2 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-bold font-mono">
+                            </div>
+                        `;
+                    }
+
+                    container.appendChild(row);
+                });
+            }
+
+            validateAndRenderModalFeedback() {
+                const totalAmountInput = document.getElementById('expenseAmountInput');
+                const totalAmount = parseFloat(totalAmountInput.value) || 0;
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                
+                if (!group) return false;
+
+                // 1. Payer validations
+                const payerValidationMessage = document.getElementById('payerValidationMessage');
+                let payersSum = 0;
+                let isPayersValid = true;
+
+                if (this.activePayerType === 'single') {
+                    payerValidationMessage.classList.add('hidden');
+                } else {
+                    group.members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`payer-input-${m.name}`)?.value || 0);
+                        payersSum += isNaN(val) ? 0 : val;
+                    });
+                    
+                    payerValidationMessage.classList.remove('hidden');
+                    const discrepancy = Math.abs(payersSum - totalAmount);
+                    if (discrepancy < 0.01) {
+                        payerValidationMessage.className = "text-[11px] text-emerald-600 mt-1 font-bold";
+                        payerValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Sum matches Total Cost ($${payersSum.toFixed(2)})`;
+                    } else {
+                        isPayersValid = false;
+                        payerValidationMessage.className = "text-[11px] text-rose-500 mt-1 font-bold";
+                        if (payersSum < totalAmount) {
+                            payerValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-pulse"></i> Sum: $${payersSum.toFixed(2)} (**$${(totalAmount - payersSum).toFixed(2)} remaining**)`;
+                        } else {
+                            payerValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-pulse"></i> Sum: $${payersSum.toFixed(2)} (**$${(payersSum - totalAmount).toFixed(2)} overpaid**)`;
+                        }
+                    }
+                }
+
+                // 2. Split mechanics evaluations
+                const splitValidationMessage = document.getElementById('splitValidationMessage');
+                let isSplitValid = true;
+
+                if (this.activeSplitMethod === 'equal') {
+                    const checkedCheckboxes = document.querySelectorAll('input[name="splitEqualMembers"]:checked');
+                    const selectedCount = checkedCheckboxes.length;
+                    if (selectedCount > 0) {
+                        const individualShare = totalAmount / selectedCount;
+                        group.members.forEach(m => {
+                            const preview = document.getElementById(`equal-share-preview-${m.name}`);
+                            const checkbox = document.querySelector(`input[name="splitEqualMembers"][value="${m.name}"]`);
+                            if (preview) {
+                                preview.textContent = checkbox && checkbox.checked ? `$${individualShare.toFixed(2)}` : '$0.00';
+                            }
+                        });
+                        splitValidationMessage.classList.add('hidden');
+                    } else {
+                        isSplitValid = false;
+                        splitValidationMessage.classList.remove('hidden');
+                        splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
+                        splitValidationMessage.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> Must select at least 1 person to split equally.`;
+                    }
+                } else if (this.activeSplitMethod === 'shares') {
+                    let totalShares = 0;
+                    let memberShares = {};
+                    group.members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`share-input-${m.name}`)?.value || 0);
+                        memberShares[m.name] = isNaN(val) ? 0 : val;
+                        totalShares += memberShares[m.name];
+                    });
+
+                    if (totalShares > 0) {
+                        group.members.forEach(m => {
+                            const preview = document.getElementById(`shares-share-preview-${m.name}`);
+                            if (preview) {
+                                const calculated = totalAmount * (memberShares[m.name] / totalShares);
+                                preview.textContent = `$${calculated.toFixed(2)}`;
+                            }
+                        });
+                        splitValidationMessage.classList.add('hidden');
+                    } else {
+                        isSplitValid = false;
+                        splitValidationMessage.classList.remove('hidden');
+                        splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
+                        splitValidationMessage.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> Sum of user shares must exceed 0.`;
+                    }
+                } else if (this.activeSplitMethod === 'percentage') {
+                    let totalPercentage = 0;
+                    group.members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`percentage-input-${m.name}`)?.value || 0);
+                        const pct = isNaN(val) ? 0 : val;
+                        totalPercentage += pct;
+
+                        const preview = document.getElementById(`percentage-share-preview-${m.name}`);
+                        if (preview) {
+                            const calculated = totalAmount * (pct / 100);
+                            preview.textContent = `$${calculated.toFixed(2)}`;
+                        }
+                    });
+
+                    splitValidationMessage.classList.remove('hidden');
+                    const discrepancy = Math.abs(totalPercentage - 100);
+                    if (discrepancy < 0.01) {
+                        splitValidationMessage.className = "text-[11px] text-emerald-600 mt-1.5 font-bold";
+                        splitValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Percentages total 100%`;
+                    } else {
+                        isSplitValid = false;
+                        splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
+                        if (totalPercentage < 100) {
+                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Sum percentage: ${totalPercentage.toFixed(1)}% (**${(100 - totalPercentage).toFixed(1)}% remaining**)`;
+                        } else {
+                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Sum percentage: ${totalPercentage.toFixed(1)}% (**${(totalPercentage - 100).toFixed(1)}% over**)`;
+                        }
+                    }
+                } else if (this.activeSplitMethod === 'exact') {
+                    let exactSum = 0;
+                    group.members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`exact-input-${m.name}`)?.value || 0);
+                        exactSum += isNaN(val) ? 0 : val;
+                    });
+
+                    splitValidationMessage.classList.remove('hidden');
+                    const discrepancy = Math.abs(exactSum - totalAmount);
+                    if (discrepancy < 0.01) {
+                        splitValidationMessage.className = "text-[11px] text-emerald-600 mt-1.5 font-bold";
+                        splitValidationMessage.innerHTML = `<i class="fa-solid fa-circle-check"></i> Allocation matches Total Cost ($${exactSum.toFixed(2)})`;
+                    } else {
+                        isSplitValid = false;
+                        splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
+                        if (exactSum < totalAmount) {
+                            splitValidationMessage.className = "text-[11px] text-rose-500 mt-1.5 font-bold";
+                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Allocated: $${exactSum.toFixed(2)} (**$${(totalAmount - exactSum).toFixed(2)} remaining**)`;
+                        } else {
+                            splitValidationMessage.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Allocated: $${exactSum.toFixed(2)} (**$${(exactSum - totalAmount).toFixed(2)} over**)`;
+                        }
+                    }
+                }
+
+                // 3. Overall validation gate
+                const saveBtn = document.getElementById('saveExpenseBtn');
+                const isValid = isPayersValid && isSplitValid && totalAmount > 0;
+                
+                if (isValid) {
+                    saveBtn.className = "px-5 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition shadow-sm cursor-pointer opacity-100";
+                    saveBtn.removeAttribute('disabled');
+                } else {
+                    saveBtn.className = "px-5 py-2 text-sm font-semibold bg-indigo-400 text-indigo-100 rounded-xl transition cursor-not-allowed opacity-60";
+                    saveBtn.setAttribute('disabled', 'true');
+                }
+
+                return isValid;
+            }
+
+            closeModal() {
+                this.groupModal.classList.add('scale-95', 'opacity-0');
+                this.expenseModal.classList.add('scale-95', 'opacity-0');
+                this.settleUpModal.classList.add('scale-95', 'opacity-0');
+                this.confirmModal.classList.add('scale-95', 'opacity-0');
+                this.editingExpenseId = null;
+                this.editingSettlementId = null;
+                this.editingGroupId = null;
+                
+                setTimeout(() => {
+                    this.modalOverlay.classList.add('hidden');
+                    this.groupModal.classList.add('hidden');
+                    this.expenseModal.classList.add('hidden');
+                    this.settleUpModal.classList.add('hidden');
+                    this.confirmModal.classList.add('hidden');
+                }, 150);
+
+                document.getElementById('groupNameInput').value = '';
+                document.getElementById('expenseDescInput').value = '';
+                document.getElementById('expenseAmountInput').value = '';
+                document.getElementById('settleAmountInput').value = '';
+            }
+
+            async handleCreateGroup(e) {
+                e.preventDefault();
+                const name = document.getElementById('groupNameInput').value.trim();
+
+                const memberRows = document.querySelectorAll('#groupMembersInputsContainer > div');
+                const members = [];
+                const uniqueNames = new Set();
+
+                memberRows.forEach(row => {
+                    const inputs = row.querySelectorAll('input');
+                    if (inputs.length >= 2) {
+                        const mName = inputs[0].value.trim();
+                        const mPhone = inputs[1].value.trim().replace(/[^\d+]/g, '');
+
+                        if (mName && !uniqueNames.has(mName)) {
+                            uniqueNames.add(mName);
+                            members.push({ name: mName, phone: mPhone });
+                        }
+                    }
+                });
+
+                if (members.length < 2) {
+                    this.showToast('Please add at least 2 distinct group members!', 'error');
+                    return;
+                }
+
+                try {
+                    if (this.editingGroupId) {
+                        await this.updateGroup(this.editingGroupId, {
+                            name: name,
+                            members: members
+                        });
+                        this.showToast(`Circle "${name}" settings modified successfully!`);
+                    } else {
+                        const newGroupId = await this.createGroup(name, members);
+                        this.selectGroup(newGroupId);
+                        this.showToast(`Group "${name}" has been created!`);
+                    }
+                    this.closeModal();
+                } catch (err) {
+                    console.error("Cloud circle modification failed: ", err);
+                    this.showToast("Failed to write group changes.", "error");
+                }
+            }
+
+            async handleJoinByGroupId() {
+                const joinId = document.getElementById('joinGroupIdInput').value.trim();
+                if (!joinId) {
+                    this.showToast("Please enter a valid Group ID code.", "error");
+                    return;
+                }
+
+                try {
+                    if (this.isCloudSupported) {
+                        const docRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'groups', joinId);
+                        const docSnap = await getDoc(docRef);
+
+                        if (docSnap.exists()) {
+                            const group = docSnap.data();
+                            const phone = this.currentUserProfile.phone;
+                            const name = this.currentUserProfile.name;
+                            const hasPhone = group.members.some(m => m.phone === phone);
+
+                            if (!hasPhone) {
+                                const updatedMembers = [...group.members, { name, phone }];
+                                await updateDoc(docRef, { members: updatedMembers });
+                            }
+
+                            this.closeModal();
+                            this.selectGroup(joinId);
+                            this.showToast(`Joined shared circle "${group.name}"!`);
+                        } else {
+                            this.showToast("Group ID not found.", "error");
+                        }
+                    } else {
+                        this.showToast("Database join codes are only active in online mode.", "info");
+                    }
+                } catch (e) {
+                    console.error("Error joining group: ", e);
+                    this.showToast("Failed to access circle record.", "error");
+                }
+            }
+
+            captureSplitInputs(members) {
+                let inputs = {};
+                if (this.activeSplitMethod === 'equal') {
+                    const checked = Array.from(document.querySelectorAll('input[name="splitEqualMembers"]:checked')).map(cb => cb.value);
+                    inputs = { checked };
+                } else if (this.activeSplitMethod === 'shares') {
+                    members.forEach(m => {
+                        inputs[m.name] = parseFloat(document.getElementById(`share-input-${m.name}`)?.value || 0);
+                    });
+                } else if (this.activeSplitMethod === 'percentage') {
+                    members.forEach(m => {
+                        inputs[m.name] = parseFloat(document.getElementById(`percentage-input-${m.name}`)?.value || 0);
+                    });
+                } else if (this.activeSplitMethod === 'exact') {
+                    members.forEach(m => {
+                        inputs[m.name] = parseFloat(document.getElementById(`exact-input-${m.name}`)?.value || 0);
+                    });
+                }
+                return inputs;
+            }
+
+            calculateComputedSplits(totalAmount, method, members) {
+                let computed = {};
+                members.forEach(m => computed[m.name] = 0);
+
+                if (totalAmount <= 0) return computed;
+
+                if (method === 'equal') {
+                    const checkedCheckboxes = document.querySelectorAll('input[name="splitEqualMembers"]:checked');
+                    const selected = Array.from(checkedCheckboxes).map(cb => cb.value);
+                    if (selected.length > 0) {
+                        const share = totalAmount / selected.length;
+                        selected.forEach(m => computed[m] = share);
+                    }
+                } else if (method === 'shares') {
+                    let totalShares = 0;
+                    let memberShares = {};
+                    members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`share-input-${m.name}`)?.value || 0);
+                        memberShares[m.name] = isNaN(val) ? 0 : val;
+                        totalShares += memberShares[m.name];
+                    });
+                    if (totalShares > 0) {
+                        members.forEach(m => {
+                            computed[m.name] = totalAmount * (memberShares[m.name] / totalShares);
+                        });
+                    }
+                } else if (method === 'percentage') {
+                    members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`percentage-input-${m.name}`)?.value || 0);
+                        const pct = isNaN(val) ? 0 : val;
+                        computed[m.name] = totalAmount * (pct / 100);
+                    });
+                } else if (method === 'exact') {
+                    members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`exact-input-${m.name}`)?.value || 0);
+                        computed[m.name] = isNaN(val) ? 0 : val;
+                    });
+                }
+                return computed;
+            }
+
+            async handleCreateExpense(e) {
+                e.preventDefault();
+                const description = document.getElementById('expenseDescInput').value.trim();
+                const totalAmount = parseFloat(document.getElementById('expenseAmountInput').value) || 0;
+                
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                const isValid = this.validateAndRenderModalFeedback();
+                if (!isValid) {
+                    this.showToast('Please fix split validation errors before saving!', 'error');
+                    return;
+                }
+
+                let paidBy = {};
+                if (this.activePayerType === 'single') {
+                    const singlePayer = document.getElementById('expensePayerSelect').value;
+                    paidBy[singlePayer] = totalAmount;
+                } else {
+                    group.members.forEach(m => {
+                        const val = parseFloat(document.getElementById(`payer-input-${m.name}`)?.value || 0);
+                        if (val > 0.009) paidBy[m.name] = val;
+                    });
+                }
+
+                let splits = this.calculateComputedSplits(totalAmount, this.activeSplitMethod, group.members);
+                let splitBetween = Object.keys(splits).filter(m => splits[m] > 0.009);
+
+                const updatedExpenses = JSON.parse(JSON.stringify(group.expenses || []));
+
+                if (this.editingExpenseId) {
+                    const index = updatedExpenses.findIndex(e => e.id === this.editingExpenseId);
+                    if (index > -1) {
+                        updatedExpenses[index] = {
+                            ...updatedExpenses[index],
+                            description,
+                            totalAmount,
+                            paidBy,
+                            splits,
+                            splitMethod: this.activeSplitMethod,
+                            splitBetween,
+                            splitInputs: this.captureSplitInputs(group.members)
+                        };
+                    }
+                } else {
+                    const newExpense = {
+                        id: 'exp_' + Date.now(),
+                        description,
+                        totalAmount,
+                        paidBy,
+                        splits,
+                        splitMethod: this.activeSplitMethod,
+                        splitBetween,
+                        timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        splitInputs: this.captureSplitInputs(group.members)
+                    };
+                    updatedExpenses.push(newExpense);
+                }
+
+                try {
+                    await this.updateGroup(this.activeGroupId, { expenses: updatedExpenses });
+                    
+                    this.closeModal();
+                    this.showToast(`Saved expense details.`);
+                    this.setMobileTab('expenses');
+                } catch (err) {
+                    console.error("Cloud expense save failure: ", err);
+                    this.showToast("Failed to sync expense modification.", "error");
+                }
+            }
+
+            async handleCreateSettlement(e) {
+                e.preventDefault();
+                const payer = document.getElementById('settlePayerSelect').value;
+                const receiver = document.getElementById('settleReceiverSelect').value;
+                const amount = parseFloat(document.getElementById('settleAmountInput').value) || 0;
+
+                if (payer === receiver) {
+                    this.showToast("Payer and Receiver cannot be the same person!", "error");
+                    return;
+                }
+
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                const updatedExpenses = JSON.parse(JSON.stringify(group.expenses || []));
+
+                if (this.editingSettlementId) {
+                    const index = updatedExpenses.findIndex(e => e.id === this.editingSettlementId);
+                    if (index > -1) {
+                        updatedExpenses[index] = {
+                            ...updatedExpenses[index],
+                            description: `Settle Payment: ${payer} → ${receiver}`,
+                            totalAmount: amount,
+                            paidBy: { [payer]: amount },
+                            splits: { [receiver]: amount },
+                            splitBetween: [receiver]
+                        };
+                    }
+                } else {
+                    const newExpense = {
+                        id: 'exp_' + Date.now(),
+                        description: `Settle Payment: ${payer} → ${receiver}`,
+                        totalAmount: amount,
+                        paidBy: { [payer]: amount },
+                        splits: { [receiver]: amount },
+                        splitMethod: 'settlement',
+                        splitBetween: [receiver],
+                        isSettlement: true,
+                        timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    };
+                    updatedExpenses.push(newExpense);
+                }
+
+                try {
+                    await this.updateGroup(this.activeGroupId, { expenses: updatedExpenses });
+
+                    this.closeModal();
+                    this.showToast(`Recorded settlement of $${amount.toFixed(2)}.`);
+                    this.setMobileTab('expenses');
+                } catch (err) {
+                    console.error("Cloud settlement save failure: ", err);
+                    this.showToast("Failed to record settlement.", "error");
+                }
+            }
+
+            async deleteExpense(expenseId) {
+                this.showConfirm(
+                    "Delete Entry?",
+                    "Are you sure you want to remove this transaction record from this circle permanently?",
+                    async () => {
+                        const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                        if (!group) return;
+
+                        const filteredExpenses = (group.expenses || []).filter(e => e.id !== expenseId);
+
+                        try {
+                            await this.updateGroup(this.activeGroupId, { expenses: filteredExpenses });
+                            this.showToast("Record successfully erased.");
+                        } catch (e) {
+                            console.error("Cloud delete failure: ", e);
+                            this.showToast("Deletion failed.", "error");
+                        }
+                    }
+                );
+            }
+
+            async deleteGroup(groupId, event) {
+                event.stopPropagation();
+                
+                const group = this.allGroups.find(g => g.id === groupId);
+                const groupName = group ? group.name : "this group";
+
+                this.showConfirm(
+                    `Delete "${groupName}"?`,
+                    "Deleting this circle removes all members, balances, and history permanently in the Cloud.",
+                    async () => {
+                        try {
+                            await this.deleteGroupData(groupId);
+                            
+                            this.showToast(`"${groupName}" has been deleted.`);
+                            if (this.activeGroupId === groupId) {
+                                this.resetView();
+                            }
+                        } catch (e) {
+                            console.error("Error deleting group: ", e);
+                            this.showToast("Deletion failed.", "error");
+                        }
+                    }
+                );
+            }
+
+            selectGroup(id) {
+                this.activeGroupId = id;
+                this.emptyStateEl.classList.add('hidden');
+                this.activeGroupContentEl.classList.remove('hidden');
+                
+                this.activeMobileTab = 'balances';
+
+                this.renderGroupSidebar();
+                this.renderActiveGroup();
+                this.updateMobileView();
+            }
+
+            copyGroupIdToClipboard() {
+                if (!this.activeGroupId) return;
+                const tempInput = document.createElement('input');
+                tempInput.value = this.activeGroupId;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                try {
+                    document.execCommand('copy');
+                    this.showToast("Group ID copied! Send this code to invite friends.");
+                } catch (err) {
+                    this.showToast("Failed to copy automatically.", "error");
+                }
+                document.body.removeChild(tempInput);
+            }
+
+            setMobileTab(tab) {
+                this.activeMobileTab = tab;
+                this.updateMobileView();
+            }
+
+            updateMobileView() {
+                const sidebar = document.getElementById('sidebarContainer');
+                const balances = document.getElementById('balancesSection');
+                const expenses = document.getElementById('expensesSection');
+                const emptyState = document.getElementById('emptyState');
+                const activeContent = document.getElementById('activeGroupContent');
+                const bottomNav = document.getElementById('mobileBottomNav');
+
+                sidebar.classList.add('hidden');
+                balances.classList.add('hidden');
+                expenses.classList.add('hidden');
+
+                const myFiltered = this.isCloudSupported ? this.getMyFilteredGroups() : this.allGroups;
+
+                if (myFiltered.length === 0) {
+                    bottomNav.classList.add('hidden');
+                    sidebar.classList.remove('hidden');
+                    emptyState.classList.remove('hidden');
+                    activeContent.classList.add('hidden');
+                    return;
+                } else {
+                    bottomNav.classList.remove('hidden');
+                }
+
+                if (!this.activeGroupId) {
+                    this.activeMobileTab = 'groups';
+                    emptyState.classList.remove('hidden');
+                    activeContent.classList.add('hidden');
+                }
+
+                if (this.activeMobileTab === 'groups') {
+                    sidebar.classList.remove('hidden');
+                    if (this.activeGroupId) {
+                        activeContent.classList.add('hidden');
+                    }
+                    emptyState.classList.add('hidden');
+                } else {
+                    if (this.activeGroupId) {
+                        activeContent.classList.remove('hidden');
+                        emptyState.classList.add('hidden');
+                        if (this.activeMobileTab === 'balances') {
+                            balances.classList.remove('hidden');
+                        } else if (this.activeMobileTab === 'expenses') {
+                            expenses.classList.remove('hidden');
+                        }
+                    } else {
+                        this.activeMobileTab = 'groups';
+                        sidebar.classList.remove('hidden');
+                        activeContent.classList.add('hidden');
+                        emptyState.classList.remove('hidden');
+                    }
+                }
+
+                const tabs = ['groups', 'expenses', 'balances'];
+                tabs.forEach(t => {
+                    const btn = document.getElementById(`mobileTab-${t}`);
+                    if (btn) {
+                        if (t === this.activeMobileTab) {
+                            btn.className = "flex flex-col items-center justify-center text-indigo-600 font-extrabold text-[11px] transition-colors flex-1";
+                        } else {
+                            btn.className = "flex flex-col items-center justify-center text-slate-400 font-medium text-[11px] transition-colors flex-1";
+                        }
+                    }
+                });
+            }
+
+            // --- Rendering & Math Functions ---
+            renderGroupSidebar() {
+                this.groupListEl.innerHTML = '';
+                const myFiltered = this.isCloudSupported ? this.getMyFilteredGroups() : this.allGroups;
+                
+                if (myFiltered.length === 0) {
+                    this.groupListEl.innerHTML = `
+                        <div class="text-center py-6 text-slate-400 text-xs italic bg-slate-50 rounded-xl border border-dashed border-slate-200 select-none">
+                            No groups found.
+                        </div>
+                    `;
+                    return;
+                }
+
+                myFiltered.forEach(group => {
+                    const isActive = group.id === this.activeGroupId;
+                    const btn = document.createElement('div');
+                    
+                    btn.className = `group flex justify-between items-center w-full px-3.5 py-3 text-sm font-semibold rounded-xl transition-all cursor-pointer ${
+                        isActive 
+                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs' 
+                        : 'text-slate-600 hover:bg-slate-50 border border-transparent hover:text-slate-900'
+                    }`;
+                    
+                    btn.setAttribute('onclick', `app.selectGroup('${group.id}')`);
+                    btn.innerHTML = `
+                        <div class="flex items-center space-x-2.5 truncate">
+                            <span class="text-base">${group.name.includes('🌲') || group.name.includes('🔑') ? '' : '📁'}</span>
+                            <span class="truncate">${group.name}</span>
+                        </div>
+                        <button onclick="app.deleteGroup('${group.id}', event)" class="opacity-0 group-hover:opacity-100 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-all cursor-pointer" title="Delete Group">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    `;
+                    this.groupListEl.appendChild(btn);
+                });
+            }
+
+            renderActiveGroup() {
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                this.activeGroupNameEl.textContent = group.name;
+                document.getElementById('activeGroupIdText').textContent = group.id;
+
+                const isCreator = !this.isCloudSupported || group.createdBy === (this.auth.currentUser ? this.auth.currentUser.uid : 'local-user');
+                const editGroupBtn = document.getElementById('editGroupBtn');
+                if (isCreator) {
+                    editGroupBtn.classList.remove('hidden');
+                } else {
+                    editGroupBtn.classList.add('hidden');
+                }
+
+                const memberStrings = group.members.map(m => m.phone ? `${m.name} (${m.phone})` : m.name);
+                this.activeGroupMembersListEl.innerHTML = `<span class="text-slate-500 font-bold">Group Members:</span> ${memberStrings.join(', ')}`;
+                
+                this.expenseCountBadge.textContent = `${(group.expenses || []).length} expense${(group.expenses || []).length === 1 ? '' : 's'}`;
+
+                const balances = this.calculateBalances(group);
+                const runningHistory = this.calculateRunningBalances(group);
+                
+                this.renderBalancesUI(balances);
+                this.renderSettlementsUI(balances);
+                this.renderExpensesHistoryUI(group.expenses || [], runningHistory);
+            }
+
+            calculateBalances(group) {
+                let balances = {};
+                group.members.forEach(m => balances[m.name] = 0);
+
+                (group.expenses || []).forEach(exp => {
+                    if (exp.paidBy && typeof exp.paidBy === 'object') {
+                        Object.keys(exp.paidBy).forEach(payer => {
+                            if (balances[payer] !== undefined) {
+                                balances[payer] += parseFloat(exp.paidBy[payer]);
+                            }
+                        });
+                    }
+
+                    if (exp.splits && typeof exp.splits === 'object') {
+                        Object.keys(exp.splits).forEach(member => {
+                            if (balances[member] !== undefined) {
+                                balances[member] -= parseFloat(exp.splits[member]);
+                            }
+                        });
+                    }
+                });
+
+                return balances;
+            }
+
+            calculateRunningBalances(group) {
+                let running = {};
+                group.members.forEach(m => running[m.name] = 0);
+                let history = {};
+                
+                (group.expenses || []).forEach(exp => {
+                    if (exp.paidBy && typeof exp.paidBy === 'object') {
+                        Object.keys(exp.paidBy).forEach(p => {
+                            running[p] = (running[p] || 0) + parseFloat(exp.paidBy[p]);
+                        });
+                    }
+                    if (exp.splits && typeof exp.splits === 'object') {
+                        Object.keys(exp.splits).forEach(m => {
+                            running[m] = (running[m] || 0) - parseFloat(exp.splits[m]);
+                        });
+                    }
+                    history[exp.id] = { ...running };
+                });
+                return history;
+            }
+
+            renderBalancesUI(balances) {
+                this.balancesContainerEl.innerHTML = '';
+                
+                Object.keys(balances).forEach(member => {
+                    const balance = balances[member];
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center py-2.5 px-3 rounded-xl border border-slate-100 hover:bg-slate-50/50 transition-colors duration-150';
+                    
+                    let statusClass = '';
+                    let statusText = '';
+                    let valStyle = '';
+
+                    if (balance > 0.01) {
+                        statusClass = 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium text-[11px] border border-emerald-100';
+                        statusText = 'is owed';
+                        valStyle = 'text-emerald-600 font-extrabold text-sm font-mono';
+                    } else if (balance < -0.01) {
+                        statusClass = 'text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md font-medium text-[11px] border border-rose-100';
+                        statusText = 'owes';
+                        valStyle = 'text-rose-600 font-extrabold text-sm font-mono';
+                    } else {
+                        statusClass = 'text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md font-medium text-[11px] border border-slate-100';
+                        statusText = 'settled';
+                        valStyle = 'text-slate-400 font-bold text-sm font-mono';
+                    }
+
+                    row.innerHTML = `
+                        <div class="flex items-center space-x-2">
+                            <div class="w-2.5 h-2.5 rounded-full ${balance > 0.01 ? 'bg-emerald-400' : balance < -0.01 ? 'bg-rose-400' : 'bg-slate-300'}"></div>
+                            <span class="font-bold text-slate-700 text-sm">${member}</span>
+                        </div>
+                        <div class="flex items-center space-x-3.5">
+                            <span class="${statusClass}">${statusText}</span>
+                            <span class="${valStyle}">${balance !== 0 ? '$' + Math.abs(balance).toFixed(2) : '$0.00'}</span>
+                        </div>
+                    `;
+                    this.balancesContainerEl.appendChild(row);
+                });
+            }
+
+            getSettlementsArray(balances) {
+                let debtors = [];
+                let creditors = [];
+
+                Object.keys(balances).forEach(member => {
+                    const balance = balances[member];
+                    if (balance < -0.01) {
+                        debtors.push({ name: member, amount: Math.abs(balance) });
+                    } else if (balance > 0.01) {
+                        creditors.push({ name: member, amount: balance });
+                    }
+                });
+
+                debtors.sort((a, b) => b.amount - a.amount);
+                creditors.sort((a, b) => b.amount - a.amount);
+
+                let settlements = [];
+                let dIdx = 0;
+                let cIdx = 0;
+
+                let dList = debtors.map(d => ({ ...d }));
+                let cList = creditors.map(c => ({ ...c }));
+
+                while (dIdx < dList.length && cIdx < cList.length) {
+                    const debtor = dList[dIdx];
+                    const creditor = cList[cIdx];
+
+                    const amountToSettle = Math.min(debtor.amount, creditor.amount);
+
+                    if (amountToSettle > 0.01) {
+                        settlements.push({
+                            from: debtor.name,
+                            to: creditor.name,
+                            amount: amountToSettle
+                        });
+                    }
+
+                    debtor.amount -= amountToSettle;
+                    creditor.amount -= amountToSettle;
+
+                    if (debtor.amount <= 0.01) dIdx++;
+                    if (creditor.amount <= 0.01) cIdx++;
+                }
+
+                return settlements;
+            }
+
+            renderSettlementsUI(balances) {
+                this.settlementsContainerEl.innerHTML = '';
+                const settlements = this.getSettlementsArray(balances);
+
+                if (settlements.length === 0) {
+                    this.settlementsContainerEl.innerHTML = `
+                        <div class="text-center py-8 text-slate-400 italic text-xs flex flex-col items-center justify-center space-y-1.5 select-none">
+                            <i class="fa-solid fa-circle-check text-emerald-500 text-2xl"></i>
+                            <span class="font-medium text-slate-500">Balances fully resolved! No transactions needed.</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                settlements.forEach(settle => {
+                    const card = document.createElement('div');
+                    card.className = 'p-3 bg-indigo-50/50 border border-indigo-100/60 rounded-xl flex items-center justify-between shadow-3xs';
+                    card.innerHTML = `
+                        <div class="flex items-center space-x-2.5 truncate">
+                            <span class="font-bold text-slate-800 text-sm truncate">${settle.from}</span>
+                            <i class="fa-solid fa-arrow-right text-indigo-400 text-xs animate-pulse"></i>
+                            <span class="font-bold text-slate-600 text-sm truncate">${settle.to}</span>
+                        </div>
+                        <div class="flex items-center space-x-2 shrink-0 ml-1">
+                            <span class="font-extrabold text-indigo-700 bg-white border border-indigo-100 px-2 py-1 rounded-lg text-xs font-mono">$${settle.amount.toFixed(2)}</span>
+                            <button onclick="app.showSettleUpModal('${settle.from}', '${settle.to}', ${settle.amount})" class="text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg transition-all shadow-sm shrink-0 cursor-pointer">
+                                <i class="fa-solid fa-handshake"></i> Settle
+                            </button>
+                        </div>
+                    `;
+                    this.settlementsContainerEl.appendChild(card);
+                });
+            }
+
+            formatPayerString(paidBy) {
+                if (!paidBy || typeof paidBy !== 'object') return 'Unknown';
+                const activePayers = Object.keys(paidBy).filter(m => paidBy[m] > 0.009);
+                if (activePayers.length === 0) return 'Nobody';
+                if (activePayers.length === 1) return activePayers[0];
+                return `${activePayers.length} people`;
+            }
+
+            getPayerTooltip(paidBy) {
+                if (!paidBy || typeof paidBy !== 'object') return '';
+                return Object.entries(paidBy)
+                    .filter(([name, val]) => val > 0.009)
+                    .map(([name, val]) => `${name} paid $${val.toFixed(2)}`)
+                    .join(', ');
+            }
+
+            getSplitTooltip(splits) {
+                if (!splits || typeof splits !== 'object') return '';
+                return Object.entries(splits)
+                    .filter(([name, val]) => val > 0.009)
+                    .map(([name, val]) => `${name} owes $${val.toFixed(2)}`)
+                    .join(', ');
+            }
+
+            getSplitMethodBadge(method) {
+                const methods = {
+                    'equal': 'Equally',
+                    'shares': 'By Shares',
+                    'percentage': 'By Percentage',
+                    'exact': 'By Exact Amount',
+                    'settlement': 'Settlement'
+                };
+                return methods[method] || 'Split';
+            }
+
+            renderExpensesHistoryUI(expenses, runningHistory) {
+                this.expensesHistoryListEl.innerHTML = '';
+
+                if (expenses.length === 0) {
+                    this.expensesHistoryListEl.innerHTML = `
+                        <div class="text-center py-12 text-slate-400 text-sm italic flex flex-col items-center justify-center space-y-2 select-none">
+                            <i class="fa-solid fa-folder-open text-3xl text-slate-300"></i>
+                            <span>No expenses logged. Tap "+ Add Expense" above to begin.</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                [...expenses].reverse().forEach(exp => {
+                    const row = document.createElement('div');
+                    const isSettlement = exp.splitMethod === 'settlement' || exp.isSettlement;
+                    const editFunctionName = isSettlement ? 'showSettleUpModalForEdit' : 'showExpenseModalForEdit';
+
+                    if (isSettlement) {
+                        const payer = Object.keys(exp.paidBy || {})[0] || 'Unknown';
+                        const receiver = Object.keys(exp.splits || {})[0] || 'Unknown';
+
+                        const balanceAfter = runningHistory && runningHistory[exp.id] ? runningHistory[exp.id][payer] : 0;
+                        const isPartial = balanceAfter < -0.01;
+                        const badgeText = isPartial ? 'Partial Settlement' : 'Balances Resolved';
+                        const badgeStyle = isPartial 
+                            ? 'bg-amber-50 border-amber-200 text-amber-800' 
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-800';
+
+                        row.className = 'group flex justify-between items-center p-4 bg-emerald-50/15 hover:bg-emerald-50/25 transition-all border-b border-slate-100 last:border-0';
+                        row.innerHTML = `
+                            <div class="flex items-start space-x-3 truncate min-w-0 flex-1 pr-3">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 mt-0.5 shadow-3xs">
+                                    <i class="fa-solid fa-handshake text-base"></i>
+                                </div>
+                                <div class="truncate min-w-0 flex-1">
+                                    <h4 class="font-bold text-slate-800 text-sm truncate"><span class="text-emerald-700 font-extrabold">${payer}</span> settled with <span class="text-emerald-700 font-extrabold">${receiver}</span></h4>
+                                    <p class="text-xs text-slate-400 mt-1">Direct Settlement Payment • ${exp.timestamp}</p>
+                                    <div class="mt-1.5">
+                                        <span class="text-[10px] border font-extrabold px-1.5 py-0.25 rounded-md ${badgeStyle}">
+                                            ${badgeText}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-3 shrink-0">
+                                <div class="text-right">
+                                    <span class="text-base font-black text-emerald-600 block font-mono">$${exp.totalAmount.toFixed(2)}</span>
+                                </div>
+                                <div class="flex items-center space-x-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <button onclick="app.${editFunctionName}('${exp.id}')" class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center w-8 h-8" title="Edit Settlement">
+                                        <i class="fa-solid fa-pen text-xs"></i>
+                                    </button>
+                                    <button onclick="app.deleteExpense('${exp.id}')" class="text-slate-300 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center w-8 h-8" title="Delete Settlement Record">
+                                        <i class="fa-solid fa-trash-can text-sm"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const payerLabel = this.formatPayerString(exp.paidBy);
+                        const payerTooltip = this.getPayerTooltip(exp.paidBy);
+                        const splitTooltip = this.getSplitTooltip(exp.splits);
+                        const splitCount = Object.keys(exp.splits || {}).filter(k => exp.splits[k] > 0.01).length;
+                        const individualShare = splitCount > 0 ? (exp.totalAmount / splitCount).toFixed(2) : '0.00';
+
+                        row.className = 'group flex justify-between items-center p-4 hover:bg-slate-50/70 transition-all border-b border-slate-100 last:border-0';
+                        row.innerHTML = `
+                            <div class="flex items-start space-x-3 truncate min-w-0 flex-1 pr-3">
+                                <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center shrink-0 border border-slate-200/50 mt-0.5">
+                                    <i class="fa-solid fa-receipt text-base"></i>
+                                </div>
+                                <div class="truncate min-w-0 flex-1">
+                                    <h4 class="font-bold text-slate-800 text-sm truncate" title="${exp.description}">${exp.description}</h4>
+                                    <p class="text-xs text-slate-400 mt-1 cursor-help" title="${payerTooltip}">
+                                        Paid by <span class="font-bold text-slate-600 border-b border-dashed border-slate-300">${payerLabel}</span> • ${exp.timestamp}
+                                    </p>
+                                    <div class="mt-1.5 flex flex-wrap gap-1 items-center">
+                                        <span class="text-[10px] bg-indigo-50 border border-indigo-100/50 text-indigo-600 font-extrabold px-1.5 py-0.25 rounded-md">
+                                            ${this.getSplitMethodBadge(exp.splitMethod || 'equal')}
+                                        </span>
+                                        <span class="text-[9px] text-slate-400 truncate max-w-[200px] border-b border-dashed border-slate-200 cursor-help" title="${splitTooltip}">
+                                            (${splitCount} split members)
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-3 shrink-0">
+                                <div class="text-right font-mono">
+                                    <span class="text-base font-extrabold text-slate-800 block">$${exp.totalAmount.toFixed(2)}</span>
+                                    <span class="text-[10px] text-slate-400 font-medium block">($${individualShare} each)</span>
+                                </div>
+                                <div class="flex items-center space-x-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <button onclick="app.${editFunctionName}('${exp.id}')" class="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center w-8 h-8" title="Edit Expense">
+                                        <i class="fa-solid fa-pen text-xs"></i>
+                                    </button>
+                                    <button onclick="app.deleteExpense('${exp.id}')" class="text-slate-300 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center w-8 h-8" title="Delete Expense">
+                                        <i class="fa-solid fa-trash-can text-sm"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    this.expensesHistoryListEl.appendChild(row);
+                });
+            }
+
+            getAvatarColor(name) {
+                const colors = [
+                    'bg-indigo-500 text-white',
+                    'bg-emerald-500 text-white',
+                    'bg-rose-500 text-white',
+                    'bg-amber-500 text-white',
+                    'bg-sky-500 text-white',
+                    'bg-violet-500 text-white',
+                    'bg-fuchsia-500 text-white',
+                    'bg-teal-500 text-white'
+                ];
+                let hash = 0;
+                for (let i = 0; i < name.length; i++) {
+                    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const index = Math.abs(hash) % colors.length;
+                return colors[index];
+            }
+
+            exportGroupReport() {
+                const group = this.allGroups.find(g => g.id === this.activeGroupId);
+                if (!group) return;
+
+                const balances = this.calculateBalances(group);
+                const runningHistory = this.calculateRunningBalances(group);
+                const settlements = this.getSettlementsArray(balances);
+                
+                const totalSpend = (group.expenses || []).reduce((sum, e) => sum + ((e.isSettlement || e.splitMethod === 'settlement') ? 0 : e.totalAmount), 0);
+                const avgSpend = group.members.length ? (totalSpend / group.members.length) : 0;
+                const exportDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                let memberCardsHtml = '';
+                group.members.forEach(m => {
+                    const bal = balances[m.name] || 0;
+                    const initials = m.name.split(' ').map(x => x[0]).join('').substring(0, 2).toUpperCase();
+                    const avatarStyle = this.getAvatarColor(m.name);
+                    
+                    let statusColor = 'text-slate-400';
+                    let statusLabel = 'Settled Up';
+                    let amountStr = `$0.00`;
+
+                    if (bal > 0.01) {
+                        statusColor = 'text-emerald-600 bg-emerald-50 border-emerald-100';
+                        statusLabel = 'Owed';
+                        amountStr = `+$${bal.toFixed(2)}`;
+                    } else if (bal < -0.01) {
+                        statusColor = 'text-rose-600 bg-rose-50 border-rose-100';
+                        statusLabel = 'Owes';
+                        amountStr = `-$${Math.abs(bal).toFixed(2)}`;
+                    }
+
+                    memberCardsHtml += `
+                        <div class="bg-white border border-slate-100 p-4 rounded-2xl flex items-center justify-between shadow-xs">
+                            <div class="flex items-center space-x-3.5">
+                                <div class="w-11 h-11 rounded-full ${avatarStyle} flex items-center justify-center font-bold text-sm tracking-wide shadow-xs">
+                                    ${initials}
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800">${m.name}</h4>
+                                    <span class="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md border ${statusColor}">${statusLabel}</span>
+                                </div>
+                            </div>
+                            <span class="text-lg font-black tracking-tight font-mono ${bal > 0.01 ? 'text-emerald-600' : bal < -0.01 ? 'text-rose-600' : 'text-slate-400'}">
+                                ${amountStr}
+                            </span>
+                        </div>
+                    `;
+                });
+
+                let settlementsHtml = '';
+                if (settlements.length === 0) {
+                    settlementsHtml = `
+                        <div class="text-center py-6 text-slate-400 italic text-sm">
+                            <i class="fa-solid fa-circle-check text-emerald-500 text-xl block mb-1"></i>
+                            All balances are completely settled!
+                        </div>
+                    `;
+                } else {
+                    settlements.forEach(s => {
+                        settlementsHtml += `
+                            <div class="bg-slate-50 border border-slate-100/60 p-3 rounded-xl flex items-center justify-between">
+                                <div class="flex items-center space-x-2.5">
+                                    <span class="font-bold text-slate-700 text-sm">${s.from}</span>
+                                    <i class="fa-solid fa-arrow-right text-indigo-400 text-xs"></i>
+                                    <span class="font-bold text-slate-700 text-sm">${s.to}</span>
+                                </div>
+                                <span class="font-black text-indigo-700 bg-white border border-indigo-100/80 px-3 py-1 rounded-lg text-xs shadow-3xs font-mono">$${s.amount.toFixed(2)}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                let ledgerRowsHtml = '';
+                if ((group.expenses || []).length === 0) {
+                    ledgerRowsHtml = `
+                        <div class="text-center py-8 text-slate-400 italic text-sm">
+                            No transactions found in this circle report.
+                        </div>
+                    `;
+                } else {
+                    [...group.expenses].reverse().forEach(exp => {
+                        if (exp.splitMethod === 'settlement' || exp.isSettlement) {
+                            const payer = Object.keys(exp.paidBy || {})[0] || 'Unknown';
+                            const receiver = Object.keys(exp.splits || {})[0] || 'Unknown';
+                            
+                            const balanceAfter = runningHistory && runningHistory[exp.id] ? runningHistory[exp.id][payer] : 0;
+                            const isPartial = balanceAfter < -0.01;
+                            const badgeText = isPartial ? 'Partial Settlement' : 'Balances Resolved';
+                            const badgeStyle = isPartial 
+                                ? 'bg-amber-50 border-amber-200 text-amber-800' 
+                                : 'bg-emerald-50 border-emerald-200 text-emerald-800';
+
+                            ledgerRowsHtml += `
+                                <div class="p-4 flex justify-between items-center bg-emerald-50/10 hover:bg-emerald-50/20 transition duration-150">
+                                    <div class="min-w-0 flex-1 pr-3">
+                                        <h4 class="font-bold text-slate-800 text-sm truncate flex items-center gap-1.5">
+                                            <i class="fa-solid fa-handshake text-emerald-500"></i>
+                                            ${payer} paid ${receiver}
+                                        </h4>
+                                        <p class="text-xs text-slate-400 mt-0.5">Direct Settlement Payment • ${exp.timestamp}</p>
+                                        <div class="mt-1.5">
+                                            <span class="text-[10px] border font-extrabold px-1.5 py-0.25 rounded-md ${badgeStyle}">
+                                                ${badgeText}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <span class="text-base font-black text-emerald-600 block font-mono">$${exp.totalAmount.toFixed(2)}</span>
+                                        <span class="block text-[10px] text-emerald-500 font-medium">Settled</span>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            const activePayers = Object.keys(exp.paidBy || {}).filter(p => exp.paidBy[p] > 0.01);
+                            let payerLabel = activePayers.join(', ');
+                            if (activePayers.length > 2) payerLabel = `${activePayers.slice(0, 2).join(', ')} & others`;
+
+                            let splitsBreakdown = '';
+                            Object.entries(exp.splits || {}).forEach(([m, val]) => {
+                                if (val > 0.01) {
+                                    splitsBreakdown += `<span class="inline-block bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded-md mr-1 mb-1">${m}: $${val.toFixed(2)}</span>`;
+                                }
+                            });
+
+                            ledgerRowsHtml += `
+                                <div class="p-4 flex justify-between items-center hover:bg-slate-50/50 transition duration-150">
+                                    <div class="min-w-0 flex-1 pr-3">
+                                        <h4 class="font-bold text-slate-800 text-sm truncate">${exp.description}</h4>
+                                        <p class="text-xs text-slate-400 mt-0.5">Paid by <span class="font-semibold text-slate-600">${payerLabel}</span> • ${exp.timestamp}</p>
+                                        <div class="mt-2 flex flex-wrap">${splitsBreakdown}</div>
+                                    </div>
+                                    <div class="text-right shrink-0 font-mono">
+                                        <span class="text-base font-black text-slate-800">$${exp.totalAmount.toFixed(2)}</span>
+                                        <span class="block text-[10px] text-slate-400 font-medium">Split ${this.getSplitMethodBadge(exp.splitMethod || 'equal')}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                }
+
+                const reportTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FairShare Report - ${group.name}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; color: black; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- Header Actions -->
+        <div class="flex justify-between items-center no-print">
+            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2 cursor-pointer shadow-sm ml-auto">
+                <i class="fa-solid fa-print"></i> Print / Save as PDF
+            </button>
+        </div>
+
+        <!-- Banner Card -->
+        <div class="bg-indigo-600 text-white p-6 sm:p-8 rounded-3xl shadow-md relative overflow-hidden">
+            <div class="relative z-10 space-y-2">
+                <span class="bg-indigo-500/55 border border-indigo-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Group Report Summary</span>
+                <h1 class="text-3xl sm:text-4xl font-black tracking-tight">${group.name}</h1>
+                <p class="text-indigo-100 text-xs">Generated on ${exportDate} via FairShare Cloud Engine</p>
+            </div>
+            <div class="absolute right-6 bottom-0 text-indigo-500/20 text-9xl font-bold z-0 pointer-events-none">
+                <i class="fa-solid fa-scale-balanced"></i>
+            </div>
+        </div>
+
+        <!-- KPI Summary row -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-2xs flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-coins"></i>
+                </div>
+                <div>
+                    <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Combined Spend</span>
+                    <span class="text-xl font-extrabold text-slate-800 font-mono">$${totalSpend.toFixed(2)}</span>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-2xs flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+                <div>
+                    <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider">Average Share</span>
+                    <span class="text-xl font-extrabold text-slate-800 font-mono">$${avgSpend.toFixed(2)}</span>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-2xs flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-receipt"></i>
+                </div>
+                <div>
+                    <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider">Transaction Count</span>
+                    <span class="text-xl font-extrabold text-slate-800">${(group.expenses || []).length} Entries</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle breakdown grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Graphic Members Standing Section -->
+            <div class="space-y-3">
+                <h3 class="font-extrabold text-slate-400 text-xs uppercase tracking-wider flex items-center gap-1.5 px-1">
+                    <i class="fa-solid fa-users text-indigo-500"></i> Members Standings
+                </h3>
+                <div class="space-y-3">
+                    ${memberCardsHtml}
+                </div>
+            </div>
+
+            <!-- Suggested Settlements Section -->
+            <div class="space-y-3">
+                <h3 class="font-extrabold text-slate-400 text-xs uppercase tracking-wider flex items-center gap-1.5 px-1">
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-500"></i> Recommended Settlements Guide
+                </h3>
+                <div class="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-2xs space-y-3">
+                    ${settlementsHtml}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Ledger History timeline -->
+        <div class="space-y-3">
+            <h3 class="font-extrabold text-slate-400 text-xs uppercase tracking-wider flex items-center gap-1.5 px-1">
+                <i class="fa-solid fa-timeline text-indigo-500"></i> Expense Ledger History
+            </h3>
+            <div class="bg-white border border-slate-200/60 rounded-2xl shadow-2xs overflow-hidden divide-y divide-slate-100">
+                ${ledgerRowsHtml}
+            </div>
+        </div>
+
+        <!-- PDF Footer branding metadata -->
+        <div class="text-center text-xs text-slate-400 py-6 border-t border-slate-200/60 flex items-center justify-between font-mono">
+            <span>FairShare Portable HTML Report Engine</span>
+            <span>www.fairshare-split.io</span>
+        </div>
+
+    </div>
+</body>
+</html>`;
+
+                const blob = new Blob([reportTemplate], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const tempAnchor = document.createElement('a');
+                tempAnchor.href = url;
+                tempAnchor.download = `fairshare-report-${group.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+                document.body.appendChild(tempAnchor);
+                tempAnchor.click();
+                document.body.removeChild(tempAnchor);
+                URL.revokeObjectURL(url);
+
+                this.showToast("Report Exported! Check your browser downloads.", "success");
+            }
+
+            resetView() {
+                this.activeGroupId = null;
+                this.activeGroupContentEl.classList.add('hidden');
+                
+                const myFiltered = this.isCloudSupported ? this.getMyFilteredGroups() : this.allGroups;
+                if (myFiltered.length === 0) {
+                    this.emptyStateEl.classList.remove('hidden');
+                } else {
+                    this.emptyStateEl.classList.add('hidden');
+                }
+                
+                this.activeMobileTab = 'groups';
+                this.renderGroupSidebar();
+                this.updateMobileView();
+            }
+        }
+
+        // Initialize and bind instance to global window driver
+        const appInstance = new FairShareApp();
+        window.app = appInstance;
+        window.onload = () => appInstance.start();
+    </script>
+</body>
+</html>
